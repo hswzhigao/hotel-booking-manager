@@ -2,7 +2,7 @@
 id: backend-api
 package: server
 module: 后端 API
-status: ready
+status: in-progress
 depends-on: [deploy-infra]
 ---
 
@@ -27,3 +27,7 @@ depends-on: [deploy-infra]
 
 ## 交付物
 - 代码 + `.env.example`；返回：验证结果、未尽事项。
+
+## 执行记录
+- 2026-09-20：原开发 agent 因运行时故障未产出任何代码；改由主 agent 开发（提交 e24f352），全部验收场景自测通过。
+- 2026-09-20：派发独立验收 agent 小赵（task_1789912783706_253tvs），验收中。开发与验收不同执行者 ✓。
