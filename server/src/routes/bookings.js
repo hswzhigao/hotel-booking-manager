@@ -164,7 +164,7 @@ router.post('/', async (req, res, next) => {
     }
     if (effectiveUse(p.benefitUsed, p.status) === 1) {
       const [c] = await conn.query(
-        'UPDATE benefit_holders SET benefit_count = benefit_count - 1 WHERE id = ? AND benefit_count >= 1', [p.benefit_holder_id]
+        'UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count - 1 WHERE id = ? AND hotel_benefit_count >= 1', [p.benefit_holder_id]
       );
       if (c.affectedRows === 0) { bad(400, '该预订人剩余升级权益不足'); }
     }
@@ -209,19 +209,19 @@ router.put('/:id', async (req, res, next) => {
     if (oldHolder !== null && oldHolder === newHolder) {
       if (newUse === 1 && oldUse === 0) {
         const [c] = await conn.query(
-          'UPDATE benefit_holders SET benefit_count = benefit_count - 1 WHERE id = ? AND benefit_count >= 1', [newHolder]
+          'UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count - 1 WHERE id = ? AND hotel_benefit_count >= 1', [newHolder]
         );
         if (c.affectedRows === 0) { bad(400, '该预订人剩余升级权益不足'); }
       } else if (oldUse === 1 && newUse === 0) {
-        await conn.query('UPDATE benefit_holders SET benefit_count = benefit_count + 1 WHERE id = ?', [oldHolder]);
+        await conn.query('UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count + 1 WHERE id = ?', [oldHolder]);
       }
     } else {
       if (oldUse === 1 && oldHolder !== null) {
-        await conn.query('UPDATE benefit_holders SET benefit_count = benefit_count + 1 WHERE id = ?', [oldHolder]);
+        await conn.query('UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count + 1 WHERE id = ?', [oldHolder]);
       }
       if (newUse === 1) {
         const [c] = await conn.query(
-          'UPDATE benefit_holders SET benefit_count = benefit_count - 1 WHERE id = ? AND benefit_count >= 1', [newHolder]
+          'UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count - 1 WHERE id = ? AND hotel_benefit_count >= 1', [newHolder]
         );
         if (c.affectedRows === 0) { bad(400, '该预订人剩余升级权益不足'); }
       }
@@ -245,7 +245,7 @@ router.delete('/:id', async (req, res, next) => {
     if (!old) bad(404, '预定不存在');
     await conn.beginTransaction();
     if (effectiveUse(old.benefit_used, old.status) === 1 && old.benefit_holder_id) {
-      await conn.query('UPDATE benefit_holders SET benefit_count = benefit_count + 1 WHERE id = ?', [old.benefit_holder_id]);
+      await conn.query('UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count + 1 WHERE id = ?', [old.benefit_holder_id]);
     }
     await conn.query('DELETE FROM bookings WHERE id = ?', [id]);
     await conn.commit();

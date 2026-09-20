@@ -23,6 +23,21 @@ router.get('/summary', async (req, res, next) => {
         (SELECT COALESCE(SUM(cost_total), 0) FROM bookings WHERE status <> 'cancelled' AND order_time >= ?) month_cost`,
       [monthStart, monthStart]
     );
+    const [[g]] = await pool.query(
+      `SELECT
+        (SELECT COUNT(*) FROM golf_orders WHERE status <> 'cancelled') golf_order_count,
+        (SELECT COALESCE(SUM(sale_price), 0) FROM golf_orders WHERE status <> 'cancelled') golf_total_sale,
+        (SELECT COALESCE(SUM(cost_price), 0) FROM golf_orders WHERE status <> 'cancelled') golf_total_cost,
+        (SELECT COALESCE(SUM(sale_price), 0) FROM golf_orders WHERE status <> 'cancelled' AND order_time >= ?) golf_month_sale,
+        (SELECT COALESCE(SUM(cost_price), 0) FROM golf_orders WHERE status <> 'cancelled' AND order_time >= ?) golf_month_cost`,
+      [monthStart, monthStart]
+    );
+    r.golf_order_count = g.golf_order_count;
+    r.golf_total_sale = g.golf_total_sale;
+    r.golf_total_cost = g.golf_total_cost;
+    r.golf_total_profit = Math.round((g.golf_total_sale - g.golf_total_cost) * 100) / 100;
+    r.golf_month_sale = g.golf_month_sale;
+    r.golf_month_profit = Math.round((g.golf_month_sale - g.golf_month_cost) * 100) / 100;
     r.total_profit = Math.round((r.total_sale - r.total_cost) * 100) / 100;
     r.month_profit = Math.round((r.month_sale - r.month_cost) * 100) / 100;
     const [recent] = await pool.query(
