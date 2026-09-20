@@ -108,3 +108,43 @@ CONSTRAINT fk_bk_holder FOREIGN KEY (benefit_holder_id) REFERENCES benefit_holde
 - backend-v2：主 agent 开发（延续 v1 风格），小赵独立验收（场景 1-3、5-6 的 API 层 + 回归）
 - frontend-v2：小陈开发（延续 v1 页面结构），小周 E2E 验收（场景 1-7 UI 层，复用 /tmp/e2e 工具与经验，限时 25 分钟）
 - deploy-v2：migrate-v2 迁移 → deploy.sh → 线上冒烟（三域名 HTTPS + 回归点检）
+
+---
+
+# V2.1 修订 — 预订人/客户概念分离（Finalized，2026-09-21 用户确认）
+
+## 用户澄清的业务模型
+
+- **客户** = 闲鱼上来订酒店的住店人：姓名/微信/电话 + 住店历史统计。**不再持有任何权益**。
+- **预订人** = 信用卡/渠道权益持有者（原"权益人"）：持有什么权益、**升级权益次数**（升房券等卡附带）、是否愿意到场/协助、合作中状态。UI 统一改称「预订人」。
+- 预定单：客户（住的人）+ 预订人（用谁的权益）双向关联。
+
+## 变更点（相对 V2）
+
+### 数据模型
+- `benefit_holders` 增加 `benefit_count INT NOT NULL DEFAULT 0`（升级权益次数）
+- `customers.benefit_count` **删除**（存量数据已确认清空重录，直接 DROP）
+- `bookings.benefit_used` 语义变更：勾选时**必须已选预订人**，扣减/返还均作用于**预订人**的 benefit_count；编辑换预订人时旧预订人返还、新预订人扣减；规则沿用 V1 §4.3（不足 400、取消返还、删除返还、cancelled 不占用）
+
+### API
+- `benefit-holders` POST/PUT 接受 `benefit_count`（手动调整用于充值/纠错）；列表返回它
+- `customers` 全组移除 benefit_count 字段
+- `bookings` POST/PUT：benefit_used=1 且无 benefit_holder_id → 400「使用升级权益需选择预订人」；权益校验与扣减目标改为预订人
+- 校验顺序：先校验预订人存在 → benefit_used=1 时校验其 benefit_count≥1
+
+### 前端
+- 所有「权益人」字样改「预订人」（菜单/页面/表头/抽屉字段/提示）
+- 预订人页：加升级权益次数（表单+列，标注手动调整；预定消耗自动扣减）
+- 客户页：移除剩余权益列与编辑项；客户详情抽屉保留历史预定（每单含"是否用权益"）与消费统计，移除权益统计
+- 预定抽屉：勾选"使用升级权益"→ 显示**所选预订人**剩余次数（随预订人切换刷新）；未选预订人时勾选权益给出内联警示；不选权益/不选预订人均可正常保存
+
+### 数据处理
+- 上线 V2.1 时清空全部业务表（hotels/room_types/customers/bookings/booking_items/benefit_holders，保留 users），用户重新录入
+- migrate-v2 增加：benefit_holders.benefit_count 加列 + customers DROP COLUMN benefit_count（幂等判断）
+
+### 验收场景（V2.1 增补）
+1. 建预订人（权益2）→ 建单勾权益关联他 → 次数 2→1；取消返还 → 2；删除返还 → 2
+2. 勾权益未选预订人 → 400 且提示明确
+3. 换预订人编辑：旧人 +1、新人 -1、不足拦截
+4. 客户 CRUD 全程无权益字段；客户详情无权益统计但有每单"是否用权益"
+5. UI 全部文案为「预订人」无「权益人」残留
