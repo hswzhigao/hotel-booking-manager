@@ -120,3 +120,88 @@ CREATE TABLE IF NOT EXISTS golf_orders (
 8. courses 接口：建过订单的球场名去重返回
 9. stats：golf_* 字段与造数一致
 10. 回归：酒店线全部功能不受影响（benefit_count→hotel_benefit_count 改名后酒店扣减正确）
+
+---
+
+# V3.1 修订 — 高尔夫权益按种类管理（Finalized，2026-09-21 用户澄清）
+
+## 业务澄清
+
+一个预订人可同时持有**多种**高尔夫权益（如 金葵花 + 经典白高尔夫 + 中信银行），不同种类**适用球场不同**：
+- 经典白高尔夫 / 中信银行：东镇、金桥两个球场通用
+- 金葵花：仅金桥（上海金桥高尔夫尊运动公园）可用
+
+球场预置两个：`上海东镇高尔夫球场`、`上海金桥高尔夫尊运动公园`（下拉预设 + 历史记录，仍可输入新球场）。
+
+## 模型变更（替换 V3 的单一 golf_benefit_count）
+
+### 新表 golf_benefit_types（权益种类字典）
+```sql
+CREATE TABLE IF NOT EXISTS golf_benefit_types (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL UNIQUE,              -- 金葵花 / 经典白高尔夫 / 中信银行…
+  course_scope VARCHAR(200) NOT NULL DEFAULT 'all', -- 'all'=全部球场通用；否则逗号分隔的球场名（精确匹配）
+  notes VARCHAR(500) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- 迁移时 seed：经典白高尔夫(all)、中信银行(all)、金葵花(上海金桥高尔夫尊运动公园)
+```
+
+### 新表 holder_golf_benefits（预订人持有权益明细）
+```sql
+CREATE TABLE IF NOT EXISTS holder_golf_benefits (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  holder_id INT UNSIGNED NOT NULL,
+  benefit_type_id INT UNSIGNED NOT NULL,
+  count_left INT NOT NULL DEFAULT 0,
+  refresh_month TINYINT DEFAULT NULL,
+  notes VARCHAR(500) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_hgb_holder FOREIGN KEY (holder_id) REFERENCES benefit_holders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_hgb_type FOREIGN KEY (benefit_type_id) REFERENCES golf_benefit_types(id),
+  UNIQUE KEY uk_holder_type (holder_id, benefit_type_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+- benefit_holders 的 `golf_benefit_count` 列删除（部署时数据本来就清空重录）；列表返回 `golf_benefit_total`=SUM(count_left)
+- benefit_holders 的 `golf_refresh_month` 列废弃（更新月跟种类走，在明细行上）
+
+### golf_orders 增加 benefit_type_id
+```sql
+benefit_type_id INT UNSIGNED DEFAULT NULL,  -- 本单消耗的权益种类（benefit_used=1 时必填）
+CONSTRAINT fk_go_type FOREIGN KEY (benefit_type_id) REFERENCES golf_benefit_types(id)
+```
+
+## 规则
+
+1. **球场×种类校验**：订单 course_name 必须在所选种类的 course_scope 内（scope='all' 或球场名在逗号列表中精确匹配），否则 400「该权益（X）不能在 Y 球场使用」
+2. **勾权益必选**：benefit_used=1 → 必须选预订人 + 权益种类；扣减对应 holder_golf_benefits 行 count_left（原子 UPDATE，不足 400 事务回滚）
+3. **流转规则不变**：取消/删除返还、编辑差额/换人旧还新扣、cancelled 不占用（镜像酒店规则，目标=种类明细行）
+4. 预订人编辑时整组替换 golf_benefits 明细（订单只引用种类 id，不引用明细行 id，替换安全）
+
+## API 变更
+
+- `GET/POST/PUT/DELETE /api/golf-benefit-types`（字典 CRUD；被持有明细引用的种类删除 409；scope 白名单：'all' 或球场名串）
+- benefit-holders：
+  - 响应增加 `golf_benefits:[{id,benefit_type_id,type_name,course_scope,count_left,refresh_month}]` 与 `golf_benefit_total`
+  - POST/PUT 接受 `golf_benefits:[{benefit_type_id,count_left,refresh_month}]`（整组替换；校验种类存在、count≥0）
+- golf-orders：
+  - POST/PUT 接受 `benefit_type_id`（benefit_used=1 必填；校验：种类存在、该预订人持有该种类、球场在 scope 内、count_left 足够）
+  - 响应增加 `benefit_type_name`；orders 列表沿用 holder_availability
+
+## 前端变更（叠加在 V3 前端任务上）
+
+1. **预订人表单**：删掉单一"高尔夫权益次数"输入，换成「持有高尔夫权益」明细列表（可增删行：权益种类下拉 × 次数 × 更新月）；列表页高尔夫列显示合计与种类摘要
+2. **高尔夫订单抽屉**：选球场（预设两个+历史 datalist）→ 选预订人 → **权益种类下拉只显示该预订人持有且适用该球场的种类**（显示剩余次数）；若该预订人没有任何适用种类 → 警示文案；勾权益必选种类
+3. 订单列表/详情显示权益种类名
+4. 权益种类管理：预订人页头部「权益种类」入口小按钮 → 简单字典 Dialog（名称/适用球场/备注）
+
+## 验收场景（V3.1 增补）
+
+1. 种子种类存在（经典白高尔夫/中信银行=通用，金葵花=仅金桥）；种类 CRUD
+2. 预订人持有多种权益（金葵花3+经典白6）→ 合计9、明细正确
+3. 建金桥单用金葵花 → 金葵花3→2；用经典白 → 经典白6→5
+4. 建东镇单用金葵花 → 400「该权益不能在上海东镇高尔夫球场使用」；用经典白 → 成功
+5. 勾权益未选种类 / 预订人未持有该种类 / 次数不足 → 各自 400
+6. 取消/删除返还到对应种类行
+7. 前端：订单抽屉种类下拉按球场过滤；无适用种类警示
