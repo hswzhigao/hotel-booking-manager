@@ -30,6 +30,7 @@ router.get('/summary', async (req, res, next) => {
         (SELECT COUNT(*) FROM booking_items bi WHERE bi.booking_id = b.id) room_count,
         (b.sale_total - b.cost_total) profit
       FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id
+      WHERE b.status <> 'cancelled'
       ORDER BY b.created_at DESC, b.id DESC LIMIT 10`
     );
     const ids = recent.map(r => r.id);
