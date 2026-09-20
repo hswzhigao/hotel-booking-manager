@@ -24,6 +24,10 @@
           <el-icon><User /></el-icon>
           <template #title>客户管理</template>
         </el-menu-item>
+        <el-menu-item index="/holders">
+          <el-icon><Avatar /></el-icon>
+          <template #title>权益人管理</template>
+        </el-menu-item>
         <el-menu-item index="/hotels">
           <el-icon><OfficeBuilding /></el-icon>
           <template #title>酒店管理</template>
@@ -61,7 +65,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Odometer, Tickets, User, OfficeBuilding, Setting, Expand, Fold, UserFilled,
+  Odometer, Tickets, User, Avatar, OfficeBuilding, Setting, Expand, Fold, UserFilled,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 

@@ -63,6 +63,9 @@
         </el-table-column>
         <el-table-column prop="customer_name" label="客户" min-width="90" />
         <el-table-column prop="hotel_name" label="酒店" min-width="130" />
+        <el-table-column label="权益人" width="90">
+          <template #default="{ row }">{{ row.benefit_holder_name || '-' }}</template>
+        </el-table-column>
         <el-table-column label="入住/离店" min-width="175">
           <template #default="{ row }">{{ dateText(row.check_in) }} ~ {{ dateText(row.check_out) }}</template>
         </el-table-column>
@@ -120,6 +123,14 @@
       size="640px"
       destroy-on-close
     >
+      <el-alert
+        v-if="hotelNeedsPresence"
+        title="该酒店需预订人本人到场办理"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="presence-alert"
+      />
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="92px">
         <el-form-item label="客户" prop="customer_id">
           <el-select
@@ -151,6 +162,28 @@
               :value="h.id"
             />
           </el-select>
+        </el-form-item>
+        <el-form-item label="权益人">
+          <el-select
+            v-model="form.benefit_holder_id"
+            placeholder="选择权益人（可空）"
+            filterable
+            clearable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="h in sortedHolderOptions"
+              :key="h.id"
+              :value="h.id"
+              :label="holderLabel(h)"
+            >
+              <div class="holder-option">
+                <span>{{ holderLabel(h) }}</span>
+                <el-tag v-if="h.willing_present" type="success" size="small">✓愿意到场</el-tag>
+              </div>
+            </el-option>
+          </el-select>
+          <div v-if="hotelNeedsPresence" class="field-tip">该酒店需本人到场，优先选择带「✓愿意到场」的权益人</div>
         </el-form-item>
         <el-form-item label="入住/离店" prop="dateRange">
           <el-date-picker
@@ -266,6 +299,14 @@
         <el-descriptions-item label="下单时间" :span="2">{{ datetimeText(detail.order_time) }}</el-descriptions-item>
         <el-descriptions-item label="客户">{{ detail.customer_name }}</el-descriptions-item>
         <el-descriptions-item label="酒店">{{ detail.hotel_name }}</el-descriptions-item>
+        <el-descriptions-item label="权益人">
+          <template v-if="detail.benefit_holder_name">
+            {{ detail.benefit_holder_name }}
+            <el-tag v-if="detailHolder && detailHolder.willing_present" type="success" size="small">✓ 愿意到场</el-tag>
+            <el-tag v-if="detailHolder && detailHolder.willing_assist" type="success" size="small">✓ 愿意协助</el-tag>
+          </template>
+          <template v-else>-</template>
+        </el-descriptions-item>
         <el-descriptions-item label="入住日期">{{ dateText(detail.check_in) }}</el-descriptions-item>
         <el-descriptions-item label="离店日期">{{ dateText(detail.check_out) }}</el-descriptions-item>
         <el-descriptions-item label="晚数">{{ detail.nights }}</el-descriptions-item>
@@ -306,7 +347,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
-import { bookingsApi, customersApi, hotelsApi, roomTypesApi } from '../api'
+import { bookingsApi, customersApi, hotelsApi, roomTypesApi, benefitHoldersApi } from '../api'
 import {
   money, profitText, profitClass, dateText, datetimeText,
   toDatetimeString, parseDatetime, statusMeta, STATUS_MAP,
@@ -316,19 +357,42 @@ import {
 const customerOptions = ref([])
 const hotelOptions = ref([])
 const roomTypeOptions = ref([])
+const holderOptions = ref([])
 
 async function loadOptions() {
   try {
-    const [cs, hs] = await Promise.all([
+    const [cs, hs, bh] = await Promise.all([
       customersApi.list({ page: 1, page_size: 100 }),
       hotelsApi.list({ page: 1, page_size: 100 }),
+      benefitHoldersApi.list({ page: 1, page_size: 200 }),
     ])
     customerOptions.value = cs.items || []
     hotelOptions.value = hs.items || []
+    holderOptions.value = bh.items || []
   } catch (e) {
     // 错误提示已由拦截器统一处理
   }
 }
+
+// 权益人选项：姓名（权益摘要）；willing_present=1 标注并排前
+const sortedHolderOptions = computed(() =>
+  [...holderOptions.value].sort((a, b) => (b.willing_present ? 1 : 0) - (a.willing_present ? 1 : 0)),
+)
+
+function holderLabel(h) {
+  return `${h.name}（${h.benefit_types || '未登记权益'}）`
+}
+
+// 所选酒店入住政策联动：需本人到场时抽屉顶部橙色提示
+const selectedHotel = computed(() =>
+  hotelOptions.value.find((h) => h.id === form.hotel_id) || null,
+)
+
+const hotelNeedsPresence = computed(() => selectedHotel.value?.checkin_presence === 1)
+
+const detailHolder = computed(() =>
+  holderOptions.value.find((h) => h.id === detail.value.benefit_holder_id) || null,
+)
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -402,6 +466,7 @@ const emptyForm = () => ({
   id: null,
   customer_id: null,
   hotel_id: null,
+  benefit_holder_id: null,
   dateRange: [todayStr(0), todayStr(1)],
   items: [{ room_type_id: null, price: null }],
   cost_total: null,
@@ -453,6 +518,7 @@ async function openEdit(row) {
       id: d.id,
       customer_id: d.customer_id,
       hotel_id: d.hotel_id,
+      benefit_holder_id: d.benefit_holder_id || null,
       dateRange: [dateText(d.check_in), dateText(d.check_out)],
       items: (d.items || []).map((it) => ({ room_type_id: it.room_type_id, price: Number(it.price) })),
       cost_total: Number(d.cost_total),
@@ -507,6 +573,7 @@ async function onSave() {
   const payload = {
     customer_id: form.customer_id,
     hotel_id: form.hotel_id,
+    benefit_holder_id: form.benefit_holder_id ?? null,
     check_in: form.dateRange[0],
     check_out: form.dateRange[1],
     cost_total: Number(form.cost_total || 0),
@@ -578,6 +645,25 @@ onMounted(() => {
 .pager {
   margin-top: 16px;
   justify-content: flex-end;
+}
+
+.presence-alert {
+  margin-bottom: 16px;
+}
+
+.field-tip {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.4;
+  margin-top: 4px;
+  width: 100%;
+}
+
+.holder-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .nights-tip {

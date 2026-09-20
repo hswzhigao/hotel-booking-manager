@@ -63,11 +63,19 @@
         <el-table-column prop="phone" label="电话" min-width="120">
           <template #default="{ row }">{{ row.phone || '-' }}</template>
         </el-table-column>
+        <el-table-column label="入住政策" width="95" align="center">
+          <template #default="{ row }">
+            <el-tag :type="presenceMeta(row.checkin_presence).type" size="small">
+              {{ presenceMeta(row.checkin_presence).label }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="room_type_count" label="房型数" width="80" align="center" />
         <el-table-column prop="booking_count" label="预定数" width="80" align="center" />
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column label="操作" width="185" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button text type="primary" @click="openGuide(row)">指南</el-button>
             <el-button text type="danger" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -105,6 +113,35 @@
         </el-form-item>
         <el-form-item label="电话">
           <el-input v-model="form.phone" maxlength="50" placeholder="联系电话" />
+        </el-form-item>
+        <el-divider content-position="left" class="policy-divider">入住政策</el-divider>
+        <el-form-item label="官方电话">
+          <el-input v-model="form.official_phone" maxlength="50" placeholder="酒店官方电话（咨询入住用）" />
+        </el-form-item>
+        <el-form-item label="本人到场">
+          <el-radio-group v-model="form.presenceValue">
+            <el-radio-button value="unknown">未确认</el-radio-button>
+            <el-radio-button value="present">需本人到场</el-radio-button>
+            <el-radio-button value="absent">无需到场</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="需提供信息">
+          <el-input
+            v-model="form.checkin_info_required"
+            type="textarea"
+            :rows="2"
+            maxlength="1000"
+            placeholder="如：姓名+身份证后四位+手机号"
+          />
+        </el-form-item>
+        <el-form-item label="办理流程">
+          <el-input
+            v-model="form.checkin_process"
+            type="textarea"
+            :rows="2"
+            maxlength="1000"
+            placeholder="电话咨询结果整理，如：提前1天致电前台报权益人姓名"
+          />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.notes" type="textarea" :rows="2" maxlength="500" />
@@ -151,13 +188,45 @@
         <el-button type="primary" :loading="roomSaving" @click="onRoomSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 入住指南 Dialog -->
+    <el-dialog
+      v-model="guideVisible"
+      :title="`入住指南 - ${guideForm.hotelName}`"
+      width="640px"
+      destroy-on-close
+      @close="flushGuideSave"
+    >
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="指南编辑后自动保存；可一键复制发送给客户"
+        class="guide-tip"
+      />
+      <el-input
+        v-model="guideForm.guide_text"
+        type="textarea"
+        :rows="10"
+        placeholder="填写入住指南，如：办理入住时请出示身份证，报预订人姓名 XXX，前台电话 021-XXXXXXX…"
+        @input="onGuideInput"
+      />
+      <div class="guide-status">
+        <el-text v-if="guideSavedAt" type="success" size="small">已自动保存 {{ guideSavedAt }}</el-text>
+        <el-text v-else-if="guideSaving" type="info" size="small">保存中…</el-text>
+      </div>
+      <template #footer>
+        <el-button @click="guideVisible = false">关闭</el-button>
+        <el-button type="primary" :icon="DocumentCopy" @click="onCopyGuide">复制指南</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, DocumentCopy } from '@element-plus/icons-vue'
 import { hotelsApi, roomTypesApi } from '../api'
 import { money } from '../utils/format'
 
@@ -223,8 +292,38 @@ const formVisible = ref(false)
 const formRef = ref(null)
 const saving = ref(false)
 
-const emptyForm = () => ({ id: null, name: '', city: '', address: '', phone: '', notes: '' })
+const emptyForm = () => ({
+  id: null,
+  name: '',
+  city: '',
+  address: '',
+  phone: '',
+  notes: '',
+  official_phone: '',
+  presenceValue: 'unknown', // unknown=未确认(null) / present=需本人到场(1) / absent=无需到场(0)
+  checkin_info_required: '',
+  checkin_process: '',
+})
 const form = reactive(emptyForm())
+
+// checkin_presence 徽标：1=需到场(橙) / 0=无需(绿) / 空=未确认(灰)
+function presenceMeta(cp) {
+  if (cp === 1) return { label: '需到场', type: 'warning' }
+  if (cp === 0) return { label: '无需到场', type: 'success' }
+  return { label: '未确认', type: 'info' }
+}
+
+function presenceToValue(cp) {
+  if (cp === 1) return 'present'
+  if (cp === 0) return 'absent'
+  return 'unknown'
+}
+
+function valueToPresence(v) {
+  if (v === 'present') return 1
+  if (v === 'absent') return 0
+  return null
+}
 
 const formRules = {
   name: [{ required: true, message: '请输入酒店名称', trigger: 'blur' }],
@@ -243,6 +342,10 @@ function openEdit(row) {
     address: row.address || '',
     phone: row.phone || '',
     notes: row.notes || '',
+    official_phone: row.official_phone || '',
+    presenceValue: presenceToValue(row.checkin_presence),
+    checkin_info_required: row.checkin_info_required || '',
+    checkin_process: row.checkin_process || '',
   })
   formVisible.value = true
 }
@@ -256,6 +359,10 @@ async function onSave() {
     address: form.address || '',
     phone: form.phone || '',
     notes: form.notes || '',
+    official_phone: form.official_phone || '',
+    checkin_presence: valueToPresence(form.presenceValue),
+    checkin_info_required: form.checkin_info_required || '',
+    checkin_process: form.checkin_process || '',
   }
   saving.value = true
   try {
@@ -292,6 +399,106 @@ async function onDelete(row) {
   } catch (e) {
     // 409 等错误提示已由拦截器统一处理
   }
+}
+
+// ===== 入住指南 =====
+const guideVisible = ref(false)
+const guideSaving = ref(false)
+const guideSavedAt = ref('')
+const guideDirty = ref(false)
+const guideForm = reactive({ hotelId: null, hotelName: '', guide_text: '' })
+// 行快照：指南自动保存走整单 PUT（后端全字段更新），避免漏传字段被清空
+let guideRowSnapshot = null
+let guideSaveTimer = null
+
+function openGuide(row) {
+  clearTimeout(guideSaveTimer)
+  guideRowSnapshot = row
+  Object.assign(guideForm, {
+    hotelId: row.id,
+    hotelName: row.name,
+    guide_text: row.guide_text || '',
+  })
+  guideSavedAt.value = ''
+  guideDirty.value = false
+  guideVisible.value = true
+}
+
+function onGuideInput() {
+  guideDirty.value = true
+  clearTimeout(guideSaveTimer)
+  guideSaveTimer = setTimeout(saveGuide, 900)
+}
+
+async function saveGuide() {
+  if (!guideForm.hotelId || guideSaving.value) return
+  const row = guideRowSnapshot || {}
+  const payload = {
+    name: row.name || '',
+    city: row.city || '',
+    address: row.address || '',
+    phone: row.phone || '',
+    notes: row.notes || '',
+    official_phone: row.official_phone || '',
+    checkin_presence: row.checkin_presence ?? null,
+    checkin_info_required: row.checkin_info_required || '',
+    checkin_process: row.checkin_process || '',
+    guide_text: guideForm.guide_text || '',
+  }
+  guideSaving.value = true
+  try {
+    await hotelsApi.update(guideForm.hotelId, payload)
+    const d = new Date()
+    const p = (x) => String(x).padStart(2, '0')
+    guideSavedAt.value = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+    guideDirty.value = false
+    // 同步行快照，避免后续自动保存用旧值覆盖
+    if (guideRowSnapshot) guideRowSnapshot.guide_text = guideForm.guide_text
+  } catch (e) {
+    // 错误提示已由拦截器统一处理
+  } finally {
+    guideSaving.value = false
+  }
+}
+
+function flushGuideSave() {
+  clearTimeout(guideSaveTimer)
+  if (guideDirty.value) saveGuide()
+}
+
+async function onCopyGuide() {
+  const text = (guideForm.guide_text || '').trim()
+  if (!text) {
+    ElMessage.warning('指南内容为空，请先填写')
+    return
+  }
+  let ok = false
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      ok = true
+    }
+  } catch (e) {
+    ok = false
+  }
+  if (!ok) {
+    // headless / 非安全上下文降级：execCommand 兜底
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+    } catch (e) {
+      ok = false
+    }
+  }
+  if (ok) ElMessage.success('已复制，可粘贴发给客户')
+  else ElMessage.error('复制失败，请手动选择文本复制')
 }
 
 // ===== 房型管理 =====
@@ -414,5 +621,24 @@ onMounted(() => loadList(1))
   color: #909399;
   line-height: 1.4;
   margin-top: 4px;
+}
+
+.policy-divider {
+  margin: 8px 0 16px;
+}
+
+.policy-divider :deep(.el-divider__text) {
+  font-size: 13px;
+  color: #409eff;
+  font-weight: 600;
+}
+
+.guide-tip {
+  margin-bottom: 12px;
+}
+
+.guide-status {
+  height: 20px;
+  margin-top: 6px;
 }
 </style>
