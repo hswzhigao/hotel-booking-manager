@@ -1,0 +1,42 @@
+/* 全局基础样式 */
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', Arial, sans-serif;
+}
+
+.page-card {
+  margin: 16px;
+}
+
+.page-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.money {
+  font-variant-numeric: tabular-nums;
+}
+
+.money-profit {
+  font-weight: 600;
+}
+
+.money-profit.positive {
+  color: #67c23a;
+}
+
+.money-profit.negative {
+  color: #f56c6c;
+}
