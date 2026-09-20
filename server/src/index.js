@@ -7,6 +7,7 @@ const roomTypesRoutes = require('./routes/roomTypes');
 const customersRoutes = require('./routes/customers');
 const bookingsRoutes = require('./routes/bookings');
 const statsRoutes = require('./routes/stats');
+const benefitHoldersRoutes = require('./routes/benefitHolders');
 
 const app = express();
 app.use(express.json());
@@ -26,6 +27,7 @@ app.use('/api/room-types', roomTypesRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/bookings', bookingsRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/benefit-holders', benefitHoldersRoutes);
 
 app.use((req, res) => res.status(404).json({ error: '接口不存在' }));
 

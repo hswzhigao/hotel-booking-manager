@@ -6,7 +6,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "init-db": "node scripts/init-db.js"
+    "init-db": "node scripts/init-db.js",
+    "migrate-v2": "node scripts/migrate-v2.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

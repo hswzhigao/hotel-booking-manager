@@ -26,10 +26,11 @@ router.get('/summary', async (req, res, next) => {
     r.total_profit = Math.round((r.total_sale - r.total_cost) * 100) / 100;
     r.month_profit = Math.round((r.month_sale - r.month_cost) * 100) / 100;
     const [recent] = await pool.query(
-      `SELECT b.*, c.name customer_name, h.name hotel_name,
+      `SELECT b.*, c.name customer_name, h.name hotel_name, bh.name benefit_holder_name,
         (SELECT COUNT(*) FROM booking_items bi WHERE bi.booking_id = b.id) room_count,
         (b.sale_total - b.cost_total) profit
       FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id
+      LEFT JOIN benefit_holders bh ON bh.id = b.benefit_holder_id
       WHERE b.status <> 'cancelled'
       ORDER BY b.created_at DESC, b.id DESC LIMIT 10`
     );

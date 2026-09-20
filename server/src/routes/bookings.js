@@ -23,7 +23,7 @@ function parseOrderTime(s) {
 
 // 校验并规整预定入参
 async function validatePayload(body) {
-  const { customer_id, hotel_id, check_in, check_out, cost_total = 0, order_time, benefit_used = 0, status = 'active', notes, items } = body || {};
+  const { customer_id, hotel_id, check_in, check_out, cost_total = 0, order_time, benefit_used = 0, status = 'active', notes, items, benefit_holder_id } = body || {};
   if (!customer_id || !hotel_id) bad(400, '请选择客户和酒店');
   const ci = parseDate(check_in), co = parseDate(check_out);
   if (!ci || !co) bad(400, '入住/离店日期格式应为 YYYY-MM-DD');
@@ -42,6 +42,12 @@ async function validatePayload(body) {
   if (!cust) bad(400, '客户不存在');
   const [[hotel]] = await pool.query('SELECT id FROM hotels WHERE id = ?', [hotel_id]);
   if (!hotel) bad(400, '酒店不存在');
+  let holderId = null;
+  if (benefit_holder_id !== undefined && benefit_holder_id !== null && benefit_holder_id !== '') {
+    const [[holder]] = await pool.query('SELECT id FROM benefit_holders WHERE id = ?', [benefit_holder_id]);
+    if (!holder) bad(400, '权益人不存在');
+    holderId = Number(benefit_holder_id);
+  }
   const rtIds = [...new Set(items.map(i => Number(i.room_type_id)))];
   const [rts] = await pool.query('SELECT id, hotel_id, name FROM room_types WHERE id IN (?)', [rtIds]);
   if (rts.length !== rtIds.length) bad(400, '存在无效房型');
@@ -54,6 +60,7 @@ async function validatePayload(body) {
     customer_id: Number(customer_id), hotel_id: Number(hotel_id),
     check_in: ci, check_out: co, nights, saleTotal, costTotal: ct,
     orderTime: ot, benefitUsed: bu, status, notes: notes || null,
+    benefit_holder_id: holderId,
     items: items.map(i => ({ room_type_id: Number(i.room_type_id), price: Number(i.price) })),
   };
 }
@@ -87,10 +94,11 @@ router.get('/', async (req, res, next) => {
     const size = Math.min(100, Number(page_size) || 20);
     const offset = (Math.max(1, Number(page) || 1) - 1) * size;
     const [rows] = await pool.query(
-      `SELECT b.*, c.name customer_name, h.name hotel_name,
+      `SELECT b.*, c.name customer_name, h.name hotel_name, bh.name benefit_holder_name,
         (SELECT COUNT(*) FROM booking_items bi WHERE bi.booking_id = b.id) room_count,
         (b.sale_total - b.cost_total) profit
       FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id
+      LEFT JOIN benefit_holders bh ON bh.id = b.benefit_holder_id
       ${whereSql} ORDER BY b.order_time DESC, b.id DESC LIMIT ? OFFSET ?`,
       [...params, size, offset]
     );
@@ -119,10 +127,11 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      `SELECT b.*, c.name customer_name, h.name hotel_name,
+      `SELECT b.*, c.name customer_name, h.name hotel_name, bh.name benefit_holder_name,
         (SELECT COUNT(*) FROM booking_items bi WHERE bi.booking_id = b.id) room_count,
         (b.sale_total - b.cost_total) profit
       FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id
+      LEFT JOIN benefit_holders bh ON bh.id = b.benefit_holder_id
       WHERE b.id = ?`, [req.params.id]
     );
     if (!rows.length) bad(404, '预定不存在');
@@ -141,8 +150,8 @@ router.post('/', async (req, res, next) => {
   try {
     const p = await validatePayload(req.body);
     await conn.beginTransaction();
-    const cols = ['customer_id', 'hotel_id', 'check_in', 'check_out', 'nights', 'sale_total', 'cost_total', 'benefit_used', 'status', 'notes'];
-    const vals = [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.benefitUsed, p.status, p.notes];
+    const cols = ['customer_id', 'hotel_id', 'check_in', 'check_out', 'nights', 'sale_total', 'cost_total', 'benefit_used', 'status', 'notes', 'benefit_holder_id'];
+    const vals = [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.benefitUsed, p.status, p.notes, p.benefit_holder_id];
     if (p.orderTime) { cols.push('order_time'); vals.push(p.orderTime); } // 不传则取数据库当前时间
     const [ins] = await conn.query(
       `INSERT INTO bookings (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, vals
@@ -178,13 +187,13 @@ router.put('/:id', async (req, res, next) => {
     await conn.beginTransaction();
     if (p.orderTime) {
       await conn.query(
-        `UPDATE bookings SET customer_id=?, hotel_id=?, check_in=?, check_out=?, nights=?, sale_total=?, cost_total=?, order_time=?, benefit_used=?, status=?, notes=? WHERE id=?`,
-        [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.orderTime, p.benefitUsed, p.status, p.notes, id]
+        `UPDATE bookings SET customer_id=?, hotel_id=?, check_in=?, check_out=?, nights=?, sale_total=?, cost_total=?, order_time=?, benefit_used=?, status=?, notes=?, benefit_holder_id=? WHERE id=?`,
+        [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.orderTime, p.benefitUsed, p.status, p.notes, p.benefit_holder_id, id]
       );
     } else {
       await conn.query(
-        `UPDATE bookings SET customer_id=?, hotel_id=?, check_in=?, check_out=?, nights=?, sale_total=?, cost_total=?, benefit_used=?, status=?, notes=? WHERE id=?`,
-        [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.benefitUsed, p.status, p.notes, id]
+        `UPDATE bookings SET customer_id=?, hotel_id=?, check_in=?, check_out=?, nights=?, sale_total=?, cost_total=?, benefit_used=?, status=?, notes=?, benefit_holder_id=? WHERE id=?`,
+        [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.benefitUsed, p.status, p.notes, p.benefit_holder_id, id]
       );
     }
     await conn.query('DELETE FROM booking_items WHERE booking_id = ?', [id]);

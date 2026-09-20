@@ -33,13 +33,36 @@ router.get('/:id/room-types', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// 入住政策字段规整：checkin_presence 允许 null(未确认)/0(无需到场)/1(需到场)
+function policyFields(body) {
+  const cpRaw = body && body.checkin_presence;
+  let cp;
+  if (cpRaw === null || cpRaw === undefined || cpRaw === '') cp = null;
+  else if (cpRaw === 0 || cpRaw === '0') cp = 0;
+  else if (cpRaw === 1 || cpRaw === '1') cp = 1;
+  else {
+    const e = new Error('需本人到场取值不合法（未确认/需到场/无需到场）');
+    e.status = 400;
+    throw e;
+  }
+  return {
+    checkin_presence: cp,
+    checkin_info_required: (body && body.checkin_info_required) || null,
+    checkin_process: (body && body.checkin_process) || null,
+    official_phone: (body && body.official_phone) || null,
+    guide_text: (body && body.guide_text) || null,
+  };
+}
+
 router.post('/', async (req, res, next) => {
   try {
     const { name, city, address, phone, notes } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: '酒店名称不能为空' });
+    const p = policyFields(req.body);
     const [ins] = await pool.query(
-      'INSERT INTO hotels (name, city, address, phone, notes) VALUES (?,?,?,?,?)',
-      [String(name).trim(), city || null, address || null, phone || null, notes || null]
+      'INSERT INTO hotels (name, city, address, phone, notes, checkin_presence, checkin_info_required, checkin_process, official_phone, guide_text) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [String(name).trim(), city || null, address || null, phone || null, notes || null,
+       p.checkin_presence, p.checkin_info_required, p.checkin_process, p.official_phone, p.guide_text]
     );
     res.json({ id: ins.insertId });
   } catch (e) { next(e); }
@@ -49,9 +72,11 @@ router.put('/:id', async (req, res, next) => {
   try {
     const { name, city, address, phone, notes } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: '酒店名称不能为空' });
+    const p = policyFields(req.body);
     const [r] = await pool.query(
-      'UPDATE hotels SET name=?, city=?, address=?, phone=?, notes=? WHERE id=?',
-      [String(name).trim(), city || null, address || null, phone || null, notes || null, req.params.id]
+      'UPDATE hotels SET name=?, city=?, address=?, phone=?, notes=?, checkin_presence=?, checkin_info_required=?, checkin_process=?, official_phone=?, guide_text=? WHERE id=?',
+      [String(name).trim(), city || null, address || null, phone || null, notes || null,
+       p.checkin_presence, p.checkin_info_required, p.checkin_process, p.official_phone, p.guide_text, req.params.id]
     );
     if (r.affectedRows === 0) return res.status(404).json({ error: '酒店不存在' });
     res.json({ ok: true });
