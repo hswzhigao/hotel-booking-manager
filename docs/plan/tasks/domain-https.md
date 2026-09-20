@@ -2,20 +2,22 @@
 id: domain-https
 package: deploy
 module: 域名与 HTTPS
-status: blocked
+status: in-progress
 depends-on: [deploy-release]
 ---
 
-# 任务：域名解析 + HTTPS（阻塞：等用户）
+# 任务：域名解析 + HTTPS
 
 ## objective
-hhao1121 域名 A 记录 → 124.220.169.36；nginx 绑定域名；certbot 签发 Let's Encrypt 证书，HTTP 自动跳转 HTTPS。
+hhao1121.cn 域名可访问系统，并配置 HTTPS。
 
-## blocked 原因
-用户已购买域名但**尚未提供完整域名（TLD）与 DNS 控制台信息**。恢复方式：用户提供域名后，指导/协助添加 A 记录（或用户提供 DNS 操作途径）。
+## 已完成
+- [x] 用户提供域名：hhao1121.cn（腾讯云 DNSPod 免费版，2026-09-20）
+- [x] 用户已在 DNSPod 添加 A 记录：@ 和 www → 124.220.169.36（已验证解析生效）
+- [x] nginx server_name 已配置 hhao1121.cn www.hhao1121.cn 并 reload
+- [x] 80 端口安全组已放行（验证连通）
 
 ## 待办
-- [ ] 拿到完整域名
-- [ ] DNS A 记录 @ 和 www → 124.220.169.36
-- [ ] nginx server_name + certbot --nginx
-- [ ] 验证 https 访问与 HTTP 跳转
+- [ ] **用户操作**：安全组放行 443/TCP（HTTPS 需要）
+- [ ] deploy-release 完成后：certbot --nginx -d hhao1121.cn -d www.hhao1121.cn 签发证书
+- [ ] 验证 https://hhao1121.cn 与 HTTP→HTTPS 跳转
