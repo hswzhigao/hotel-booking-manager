@@ -2,7 +2,7 @@
 id: deploy-infra
 package: deploy
 module: 基础设施
-status: in-progress
+status: done
 depends-on: []
 ---
 
@@ -16,10 +16,10 @@ depends-on: []
 - [x] MySQL 远程管理用户 hhao@%（用户自设密码）
 
 ## 待办
-- [ ] 建库 `hhao1121` + 应用账号 `hotel_app`@localhost（随机强密码）
-- [ ] SSH 隧道 127.0.0.1:13306 → 124.220.169.36:3306（后台保活）
-- [ ] git init + .gitignore + 首次提交
-- [ ] deploy/：nginx 站点配置、systemd unit、deploy.sh、生产 .env
+- [x] 建库 `hhao1121` + 应用账号 `hotel_app`@localhost（随机强密码）
+- [x] SSH 隧道 127.0.0.1:13306 → 124.220.169.36:3306（后台保活）
+- [x] git init + .gitignore + 首次提交（基线 7049001）
+- [x] deploy/：nginx 站点配置、systemd unit、deploy.sh、生产 .env（已安装到服务器：sites-enabled/hhao1121 生效、hotel-api.service 已 daemon-reload、/opt/hhao1121/server/.env 就位）
 
 ## verification
-本地 `mysql` 不可用，用 `nc -z 127.0.0.1 13306` + 后端启动连通性验证。
+✅ `nc -z 127.0.0.1 13306` 通；服务器 `sudo nginx -t` 通过且 nginx active。状态：**done**（域名部分拆至 domain-https 任务）。

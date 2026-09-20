@@ -1,0 +1,9 @@
+# 生产环境 .env 模板（服务器 /opt/hhao1121/server/.env，不进 git）
+# 注意生产 DB_PORT=3306（本机直连），不是开发用的隧道 13306
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=hotel_app
+DB_PASSWORD=<生产密码与开发一致即可，同库>
+DB_NAME=hhao1121
+JWT_SECRET=<生产独立随机值>
+PORT=3000
