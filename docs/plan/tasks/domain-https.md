@@ -2,7 +2,7 @@
 id: domain-https
 package: deploy
 module: 域名与 HTTPS
-status: in-progress
+status: done
 depends-on: [deploy-release]
 ---
 
@@ -21,3 +21,4 @@ hhao1121.cn 域名可访问系统，并配置 HTTPS。
 - [x] **用户操作**：安全组放行 443/TCP（HTTPS 需要）——2026-09-20 由主 agent 通过共享浏览器操作完成：该实例为轻量应用服务器（Lighthouse，上海地域 lhins-ci9b82qo），在「防火墙」页添加规则 HTTPS(443)/TCP/全部IPv4/允许，已验证放行生效（connection refused = 无监听，非超时拦截）
 - [ ] deploy-release 完成后：certbot --nginx -d hhao1121.cn -d www.hhao1121.cn 签发证书
 - [ ] 验证 https://hhao1121.cn 与 HTTP→HTTPS 跳转
+- 2026-09-21：certbot 签发成功（hhao1121.cn / www / order9d 三域名），HTTP 301 强制跳转 HTTPS，浏览器实测登录页正常渲染。任务完成。

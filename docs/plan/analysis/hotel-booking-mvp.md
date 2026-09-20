@@ -19,3 +19,4 @@
 - 并行策略：backend-api 与 frontend-web 依据同一份 Finalized 契约并行开发，文件区不重叠（server/ vs web/）。dev server 联调由主 agent 集成阶段负责（前端 vite 代理到本地后端，后端走隧道连服务器 MySQL）。
 - 验收：每个任务由未参与开发的 agent 独立验收，依据 §8 验收场景；开发与验收不同执行者。
 - 2026-09-20 23:56：backend-api done、frontend-web done（E2E pass）。deploy-release 启动。
+- 2026-09-21 00:05：deploy-release 完成（deploy.sh 一键部署，冒烟测试全过）；domain-https 完成。**全需求交付**：https://hhao1121.cn 上线。
