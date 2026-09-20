@@ -2,7 +2,7 @@
 id: backend-api
 package: server
 module: 后端 API
-status: in-progress
+status: done
 depends-on: [deploy-infra]
 ---
 
@@ -31,3 +31,4 @@ depends-on: [deploy-infra]
 ## 执行记录
 - 2026-09-20：原开发 agent 因运行时故障未产出任何代码；改由主 agent 开发（提交 e24f352），全部验收场景自测通过。
 - 2026-09-20：派发独立验收 agent 小赵（task_1789912783706_253tvs），验收中。开发与验收不同执行者 ✓。
+- 2026-09-20：验收 pass（e24f352，60+ curl 实测 + 规则走查，1 项低风险观察）。修复 recent_bookings 排除 cancelled（0aaff07）后针对性复验 pass。任务完成：开发=主 agent，验收=小赵（不同执行者 ✓）。
