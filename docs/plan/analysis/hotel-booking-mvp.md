@@ -18,3 +18,4 @@
 - 2026-09-20：设计定案（system-design.md）。服务器已装 Node v22.23.2 + nginx 1.24.0。3306 安全组未放行——采用 SSH 隧道方案（本地 13306），无需放行。
 - 并行策略：backend-api 与 frontend-web 依据同一份 Finalized 契约并行开发，文件区不重叠（server/ vs web/）。dev server 联调由主 agent 集成阶段负责（前端 vite 代理到本地后端，后端走隧道连服务器 MySQL）。
 - 验收：每个任务由未参与开发的 agent 独立验收，依据 §8 验收场景；开发与验收不同执行者。
+- 2026-09-20 23:56：backend-api done、frontend-web done（E2E pass）。deploy-release 启动。

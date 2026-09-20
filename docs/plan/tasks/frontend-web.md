@@ -2,7 +2,7 @@
 id: frontend-web
 package: web
 module: 前端页面
-status: ready
+status: done
 depends-on: [backend-api]
 ---
 
@@ -27,3 +27,7 @@ depends-on: [backend-api]
 
 ## 交付物
 - 代码；返回：验证结果、未尽事项。
+
+## 执行记录
+- 2026-09-20：小陈开发完成（提交 25158c9），构建零报错 + 无头 Chrome 渲染验证，自修 401 重定向循环 bug。
+- 2026-09-20：E2E 集成验收 pass。第一轮 agent 因平台故障中断（工具保留）；小周限时接手快跑，S02–S09 全过（截图+DOM断言+API实查），零产品 bug；两个疑点均坐实为测试脚本问题。开发=小陈，E2E 验收=小赵/小周（不同执行者 ✓）。
