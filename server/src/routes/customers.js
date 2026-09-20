@@ -66,13 +66,11 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, wechat, phone, benefit_count = 0, notes } = req.body || {};
+    const { name, wechat, phone, notes } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: '客户姓名不能为空' });
-    const bc = Number(benefit_count) || 0;
-    if (bc < 0 || !Number.isInteger(bc)) return res.status(400).json({ error: '权益次数不合法' });
     const [ins] = await pool.query(
-      'INSERT INTO customers (name, wechat, phone, benefit_count, notes) VALUES (?,?,?,?,?)',
-      [String(name).trim(), wechat || null, phone || null, bc, notes || null]
+      'INSERT INTO customers (name, wechat, phone, notes) VALUES (?,?,?,?)',
+      [String(name).trim(), wechat || null, phone || null, notes || null]
     );
     res.json({ id: ins.insertId });
   } catch (e) { next(e); }
@@ -80,16 +78,11 @@ router.post('/', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, wechat, phone, benefit_count, notes } = req.body || {};
+    const { name, wechat, phone, notes } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: '客户姓名不能为空' });
-    if (benefit_count != null) {
-      const bc = Number(benefit_count);
-      if (!Number.isInteger(bc) || bc < 0) return res.status(400).json({ error: '权益次数不合法' });
-    }
     const [r] = await pool.query(
-      'UPDATE customers SET name=?, wechat=?, phone=?, benefit_count=COALESCE(?, benefit_count), notes=? WHERE id=?',
-      [String(name).trim(), wechat || null, phone || null,
-       benefit_count == null ? null : Number(benefit_count), notes || null, req.params.id]
+      'UPDATE customers SET name=?, wechat=?, phone=?, notes=? WHERE id=?',
+      [String(name).trim(), wechat || null, phone || null, notes || null, req.params.id]
     );
     if (r.affectedRows === 0) return res.status(404).json({ error: '客户不存在' });
     res.json({ ok: true });

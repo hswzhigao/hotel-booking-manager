@@ -35,11 +35,17 @@ async function constraintExists(conn, table, constraint) {
         willing_present TINYINT(1) NOT NULL DEFAULT 0,
         willing_assist TINYINT(1) NOT NULL DEFAULT 0,
         active TINYINT(1) NOT NULL DEFAULT 1,
+        benefit_count INT NOT NULL DEFAULT 0,
         notes VARCHAR(500) DEFAULT NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+    // V2.1：权益人表补 benefit_count（老 v2 结构升级）
+    if (!(await columnExists(conn, 'benefit_holders', 'benefit_count'))) {
+      await conn.query('ALTER TABLE benefit_holders ADD COLUMN benefit_count INT NOT NULL DEFAULT 0 AFTER active');
+      console.log('  benefit_holders + benefit_count');
+    }
     console.log('[1/3] benefit_holders 表就绪');
 
     // 2. hotels 入住政策字段
@@ -70,7 +76,13 @@ async function constraintExists(conn, table, constraint) {
       console.log('  bookings + fk_bk_holder');
     }
     console.log('[3/3] bookings 关联就绪');
-    console.log('V2 迁移完成（幂等，可重复执行）');
+
+    // V2.1：客户表移除 benefit_count（权益归属预订人；存量数据已确认清空重录）
+    if (await columnExists(conn, 'customers', 'benefit_count')) {
+      await conn.query('ALTER TABLE customers DROP COLUMN benefit_count');
+      console.log('  customers - benefit_count（权益已归属预订人）');
+    }
+    console.log('V2.1 迁移完成（幂等，可重复执行）');
   } finally {
     await conn.end();
   }

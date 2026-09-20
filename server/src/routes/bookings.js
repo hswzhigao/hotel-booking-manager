@@ -38,16 +38,18 @@ async function validatePayload(body) {
     if (!it.room_type_id || isNaN(p) || p < 0) bad(400, '明细行的房型或价格不合法');
   }
   const ot = parseOrderTime(order_time);
-  const [[cust]] = await pool.query('SELECT id, benefit_count FROM customers WHERE id = ?', [customer_id]);
+  const [[cust]] = await pool.query('SELECT id FROM customers WHERE id = ?', [customer_id]);
   if (!cust) bad(400, '客户不存在');
   const [[hotel]] = await pool.query('SELECT id FROM hotels WHERE id = ?', [hotel_id]);
   if (!hotel) bad(400, '酒店不存在');
   let holderId = null;
   if (benefit_holder_id !== undefined && benefit_holder_id !== null && benefit_holder_id !== '') {
     const [[holder]] = await pool.query('SELECT id FROM benefit_holders WHERE id = ?', [benefit_holder_id]);
-    if (!holder) bad(400, '权益人不存在');
+    if (!holder) bad(400, '预订人不存在');
     holderId = Number(benefit_holder_id);
   }
+  // V2.1：升级权益归属预订人——勾选权益必须已选预订人
+  if (bu === 1 && holderId === null) bad(400, '使用升级权益需选择预订人');
   const rtIds = [...new Set(items.map(i => Number(i.room_type_id)))];
   const [rts] = await pool.query('SELECT id, hotel_id, name FROM room_types WHERE id IN (?)', [rtIds]);
   if (rts.length !== rtIds.length) bad(400, '存在无效房型');
@@ -162,9 +164,9 @@ router.post('/', async (req, res, next) => {
     }
     if (effectiveUse(p.benefitUsed, p.status) === 1) {
       const [c] = await conn.query(
-        'UPDATE customers SET benefit_count = benefit_count - 1 WHERE id = ? AND benefit_count >= 1', [p.customer_id]
+        'UPDATE benefit_holders SET benefit_count = benefit_count - 1 WHERE id = ? AND benefit_count >= 1', [p.benefit_holder_id]
       );
-      if (c.affectedRows === 0) { bad(400, '该客户剩余升级权益不足'); }
+      if (c.affectedRows === 0) { bad(400, '该预订人剩余升级权益不足'); }
     }
     await conn.commit();
     res.json({ id: bid });
@@ -202,24 +204,26 @@ router.put('/:id', async (req, res, next) => {
     }
     const oldUse = effectiveUse(old.benefit_used, old.status);
     const newUse = effectiveUse(p.benefitUsed, p.status);
-    if (old.customer_id === p.customer_id) {
+    const oldHolder = old.benefit_holder_id || null;
+    const newHolder = p.benefit_holder_id || null;
+    if (oldHolder !== null && oldHolder === newHolder) {
       if (newUse === 1 && oldUse === 0) {
         const [c] = await conn.query(
-          'UPDATE customers SET benefit_count = benefit_count - 1 WHERE id = ? AND benefit_count >= 1', [p.customer_id]
+          'UPDATE benefit_holders SET benefit_count = benefit_count - 1 WHERE id = ? AND benefit_count >= 1', [newHolder]
         );
-        if (c.affectedRows === 0) { bad(400, '该客户剩余升级权益不足'); }
+        if (c.affectedRows === 0) { bad(400, '该预订人剩余升级权益不足'); }
       } else if (oldUse === 1 && newUse === 0) {
-        await conn.query('UPDATE customers SET benefit_count = benefit_count + 1 WHERE id = ?', [p.customer_id]);
+        await conn.query('UPDATE benefit_holders SET benefit_count = benefit_count + 1 WHERE id = ?', [oldHolder]);
       }
     } else {
-      if (oldUse === 1) {
-        await conn.query('UPDATE customers SET benefit_count = benefit_count + 1 WHERE id = ?', [old.customer_id]);
+      if (oldUse === 1 && oldHolder !== null) {
+        await conn.query('UPDATE benefit_holders SET benefit_count = benefit_count + 1 WHERE id = ?', [oldHolder]);
       }
       if (newUse === 1) {
         const [c] = await conn.query(
-          'UPDATE customers SET benefit_count = benefit_count - 1 WHERE id = ? AND benefit_count >= 1', [p.customer_id]
+          'UPDATE benefit_holders SET benefit_count = benefit_count - 1 WHERE id = ? AND benefit_count >= 1', [newHolder]
         );
-        if (c.affectedRows === 0) { bad(400, '该客户剩余升级权益不足'); }
+        if (c.affectedRows === 0) { bad(400, '该预订人剩余升级权益不足'); }
       }
     }
     await conn.commit();
@@ -240,8 +244,8 @@ router.delete('/:id', async (req, res, next) => {
     const [[old]] = await conn.query('SELECT * FROM bookings WHERE id = ?', [id]);
     if (!old) bad(404, '预定不存在');
     await conn.beginTransaction();
-    if (effectiveUse(old.benefit_used, old.status) === 1) {
-      await conn.query('UPDATE customers SET benefit_count = benefit_count + 1 WHERE id = ?', [old.customer_id]);
+    if (effectiveUse(old.benefit_used, old.status) === 1 && old.benefit_holder_id) {
+      await conn.query('UPDATE benefit_holders SET benefit_count = benefit_count + 1 WHERE id = ?', [old.benefit_holder_id]);
     }
     await conn.query('DELETE FROM bookings WHERE id = ?', [id]);
     await conn.commit();
