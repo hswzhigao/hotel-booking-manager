@@ -50,6 +50,7 @@
 
     <el-card shadow="never" class="recent-card">
       <template #header>最近预定</template>
+      <div class="desktop-table">
       <el-table :data="recentBookings" v-loading="loading" empty-text="暂无预定数据">
         <el-table-column label="下单时间" width="170">
           <template #default="{ row }">{{ datetimeText(row.order_time) }}</template>
@@ -80,6 +81,34 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <!-- 移动端简化卡片（客户/酒店/日期/金额/状态） -->
+      <div class="mobile-cards" v-loading="loading">
+        <el-empty v-if="!recentBookings.length" description="暂无预定数据" :image-size="60" />
+        <div v-for="row in recentBookings" :key="row.id" class="m-card">
+          <div class="m-title">
+            <span class="m-name">{{ row.customer_name }}</span>
+            <el-tag :type="statusMeta(row.status).type" size="small">{{ statusMeta(row.status).label }}</el-tag>
+          </div>
+          <div class="m-sub">{{ row.hotel_name }}</div>
+          <div class="m-line">
+            <span class="m-label">入住/离店</span>
+            <span class="m-value">{{ row.check_in }} ~ {{ row.check_out }}</span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">金额</span>
+            <span class="m-value">
+              <span class="money">{{ money(row.sale_total) }}</span>
+              /
+              <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
+            </span>
+          </div>
+        </div>
+        <div class="recent-mobile-more">
+          <el-button text type="primary" size="small" @click="goBookings">查看全部预定</el-button>
+        </div>
+      </div>
     </el-card>
   </div>
 </template>
@@ -252,5 +281,9 @@ function goBookings() {
 
 .recent-card {
   margin-top: 4px;
+}
+
+.recent-mobile-more {
+  text-align: center;
 }
 </style>

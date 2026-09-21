@@ -1,7 +1,7 @@
 <template>
   <div class="page-card">
     <el-card shadow="never">
-      <div class="page-toolbar">
+      <div class="page-toolbar desktop-toolbar">
         <el-input
           v-model="search"
           placeholder="搜索名称 / 城市 / 地址"
@@ -15,6 +15,21 @@
         <el-button type="primary" :icon="Plus" @click="openCreate">新建酒店</el-button>
       </div>
 
+      <!-- 移动端工具栏（仅关键词搜索，无其余筛选，不设折叠开关） -->
+      <div class="mobile-toolbar">
+        <el-input
+          v-model="search"
+          class="toolbar-search"
+          placeholder="搜索名称 / 城市 / 地址"
+          clearable
+          @keyup.enter="loadList(1)"
+        />
+        <el-button type="primary" @click="loadList(1)">查询</el-button>
+        <el-button @click="resetSearch">重置</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新建酒店</el-button>
+      </div>
+
+      <div class="desktop-table">
       <el-table :data="rows" v-loading="loading" empty-text="暂无酒店数据" row-key="id" @expand-change="onExpandChange">
         <el-table-column type="expand">
           <template #default="{ row }">
@@ -80,6 +95,31 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <!-- 移动端卡片列表 -->
+      <div class="mobile-cards" v-loading="loading">
+        <el-empty v-if="!rows.length" description="暂无酒店数据" :image-size="60" />
+        <div v-for="row in rows" :key="row.id" class="m-card">
+          <div class="m-title">
+            <span class="m-name">{{ row.name }}</span>
+            <el-tag :type="presenceMeta(row.checkin_presence).type" size="small">
+              {{ presenceMeta(row.checkin_presence).label }}
+            </el-tag>
+          </div>
+          <div class="m-sub">{{ [row.city, row.address].filter(Boolean).join(' · ') || '-' }}</div>
+          <div class="m-line">
+            <span class="m-label">房型/预定</span>
+            <span class="m-value">{{ row.room_type_count }} / {{ row.booking_count }}</span>
+          </div>
+          <div class="m-actions">
+            <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button text type="primary" size="small" @click="openRoomTypes(row)">房型</el-button>
+            <el-button text type="primary" size="small" @click="openGuide(row)">指南</el-button>
+            <el-button text type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          </div>
+        </div>
+      </div>
 
       <el-pagination
         class="pager"
@@ -219,6 +259,36 @@
         <el-button @click="guideVisible = false">关闭</el-button>
         <el-button type="primary" :icon="DocumentCopy" @click="onCopyGuide">复制指南</el-button>
       </template>
+    </el-dialog>
+
+    <!-- 移动端房型管理（桌面端由表格行展开承担；共用 openRoomCreate/openRoomEdit/onRoomDelete） -->
+    <el-dialog
+      v-model="mobileRoomsVisible"
+      :title="`房型管理 - ${mobileRoomsHotel?.name || ''}`"
+      width="92%"
+      destroy-on-close
+    >
+      <div class="mobile-room-toolbar">
+        <el-button size="small" type="primary" :icon="Plus" @click="openRoomCreate(mobileRoomsHotel)">
+          新增房型
+        </el-button>
+        <el-text type="info" size="small">参考价仅作提示，预定价格在预定单中逐间填写</el-text>
+      </div>
+      <div v-for="rt in roomTypeMap[mobileRoomsHotel?.id] || []" :key="rt.id" class="mobile-room-row">
+        <div class="mobile-room-info">
+          <div class="mobile-room-name">{{ rt.name }}</div>
+          <div class="mobile-room-meta">
+            {{ rt.bed_type || '-' }} · {{ rt.default_price != null ? money(rt.default_price) : '无参考价' }}{{ rt.notes ? ` · ${rt.notes}` : '' }}
+          </div>
+        </div>
+        <el-button text type="primary" size="small" @click="openRoomEdit(mobileRoomsHotel, rt)">编辑</el-button>
+        <el-button text type="danger" size="small" @click="onRoomDelete(mobileRoomsHotel, rt)">删除</el-button>
+      </div>
+      <el-empty
+        v-if="!(roomTypeMap[mobileRoomsHotel?.id] || []).length"
+        description="该酒店暂无房型，请先添加"
+        :image-size="60"
+      />
     </el-dialog>
   </div>
 </template>
@@ -399,6 +469,16 @@ async function onDelete(row) {
   } catch (e) {
     // 409 等错误提示已由拦截器统一处理
   }
+}
+
+// ===== 移动端房型管理（卡片「房型」按钮入口） =====
+const mobileRoomsVisible = ref(false)
+const mobileRoomsHotel = ref(null)
+
+function openRoomTypes(row) {
+  mobileRoomsHotel.value = row
+  mobileRoomsVisible.value = true
+  loadRoomTypes(row.id)
 }
 
 // ===== 入住指南 =====
@@ -640,5 +720,37 @@ onMounted(() => loadList(1))
 .guide-status {
   height: 20px;
   margin-top: 6px;
+}
+
+.mobile-room-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mobile-room-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.mobile-room-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-room-name {
+  font-weight: 600;
+  color: #303133;
+}
+
+.mobile-room-meta {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 2px;
+  word-break: break-all;
 }
 </style>

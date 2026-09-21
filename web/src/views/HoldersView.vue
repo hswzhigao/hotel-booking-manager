@@ -1,7 +1,7 @@
 <template>
   <div class="page-card">
     <el-card shadow="never">
-      <div class="page-toolbar">
+      <div class="page-toolbar desktop-toolbar">
         <el-input
           v-model="filters.search"
           placeholder="搜索姓名 / 微信 / 电话"
@@ -39,6 +39,52 @@
         <el-button type="primary" :icon="Plus" @click="openCreate">新建预订人</el-button>
       </div>
 
+      <!-- 移动端工具栏 -->
+      <div class="mobile-toolbar">
+        <el-input
+          v-model="filters.search"
+          class="toolbar-search"
+          placeholder="搜索姓名 / 微信 / 电话"
+          clearable
+          @keyup.enter="loadList(1)"
+        />
+        <el-button type="primary" @click="loadList(1)">查询</el-button>
+        <el-button @click="filtersExpanded = !filtersExpanded">
+          {{ filtersExpanded ? '收起筛选' : '筛选' }}
+        </el-button>
+        <el-button type="primary" :icon="Plus" circle title="新建预订人" @click="openCreate" />
+        <div v-show="filtersExpanded" class="filter-extra">
+          <el-select v-model="filters.willing_present" placeholder="愿意到场" clearable>
+            <el-option label="愿意到场" :value="1" />
+            <el-option label="不愿意到场" :value="0" />
+          </el-select>
+          <el-select v-model="filters.willing_assist" placeholder="愿意协助" clearable>
+            <el-option label="愿意协助" :value="1" />
+            <el-option label="不愿意协助" :value="0" />
+          </el-select>
+          <el-select v-model="filters.active" placeholder="合作中" clearable>
+            <el-option label="合作中" :value="1" />
+            <el-option label="已停用" :value="0" />
+          </el-select>
+          <el-select v-model="filters.provides_hotel" placeholder="出酒店" clearable>
+            <el-option label="出酒店权益" :value="1" />
+            <el-option label="不出酒店" :value="0" />
+          </el-select>
+          <el-select v-model="filters.provides_golf" placeholder="出高尔夫" clearable>
+            <el-option label="出高尔夫权益" :value="1" />
+            <el-option label="不出高尔夫" :value="0" />
+          </el-select>
+          <el-select v-model="filters.availability" placeholder="可用时间" clearable>
+            <el-option v-for="(m, k) in AVAILABILITY_MAP" :key="k" :label="m.label" :value="k" />
+          </el-select>
+          <el-button @click="resetFilters">重置</el-button>
+          <div class="toolbar-spacer" />
+          <el-button plain :icon="Collection" @click="openTypesDialog">权益种类</el-button>
+          <el-button type="primary" :icon="Plus" @click="openCreate">新建预订人</el-button>
+        </div>
+      </div>
+
+      <div class="desktop-table">
       <el-table
         :data="rows"
         v-loading="loading"
@@ -126,6 +172,65 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <!-- 移动端卡片列表 -->
+      <div class="mobile-cards" v-loading="loading">
+        <el-empty v-if="!rows.length" description="暂无预订人数据" :image-size="60" />
+        <div
+          v-for="row in rows"
+          :key="row.id"
+          class="m-card"
+          :class="{ 'row-refresh-due': row.hotel_refresh_month === currentMonth || golfDue(row) }"
+        >
+          <div class="m-title">
+            <span class="m-name">{{ row.name }}</span>
+            <span class="m-tags">
+              <el-tag :type="row.active ? 'success' : 'info'" size="small">
+                {{ row.active ? '合作中' : '已停用' }}
+              </el-tag>
+              <el-tag v-if="row.provides_hotel" type="success" size="small" class="due-tag">出酒店</el-tag>
+              <el-tag v-if="row.provides_golf" type="primary" size="small" class="due-tag">出高尔夫</el-tag>
+              <span v-if="!row.provides_hotel && !row.provides_golf" class="badge-none">都不出</span>
+            </span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">卡片/来源</span>
+            <span class="m-value">
+              {{ row.card_type || '-' }} ·
+              <el-tag :type="sourceChannelType(row.source_channel)" size="small">
+                {{ channelText(row.source_channel) }}
+              </el-tag>
+            </span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">酒店权益</span>
+            <span class="m-value">
+              <el-tag :type="row.hotel_benefit_count > 0 ? 'warning' : 'info'" size="small">
+                {{ row.hotel_benefit_count }} 次
+              </el-tag>
+              <span :class="{ 'month-due': row.hotel_refresh_month === currentMonth }" class="m-month">
+                {{ monthText(row.hotel_refresh_month) }}更新
+              </span>
+              <el-tag v-if="row.hotel_refresh_month === currentMonth" type="warning" size="small" class="due-tag">本月更新</el-tag>
+            </span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">高尔夫权益</span>
+            <span class="m-value">
+              <el-tag :type="(row.golf_benefit_total ?? 0) > 0 ? 'success' : 'info'" size="small">
+                {{ row.golf_benefit_total ?? 0 }} 次
+              </el-tag>
+              <el-tag v-if="golfDue(row)" type="warning" size="small" class="due-tag">本月更新</el-tag>
+              <div class="m-summary">{{ golfSummary(row) }}</div>
+            </span>
+          </div>
+          <div class="m-actions">
+            <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button text type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          </div>
+        </div>
+      </div>
 
       <el-pagination
         class="pager"
@@ -342,6 +447,9 @@ function golfSummary(row) {
 }
 
 // ===== 列表与筛选 =====
+// 移动端筛选折叠开关（桌面端由 CSS display:contents 还原平铺，不受影响）
+const filtersExpanded = ref(false)
+
 const loading = ref(false)
 const rows = ref([])
 const total = ref(0)
@@ -675,6 +783,11 @@ onMounted(() => loadList(1))
 
 :deep(.el-table .row-refresh-due:hover > td.el-table__cell) {
   background-color: #faecab;
+}
+
+/* 移动端卡片同款高亮 */
+.m-card.row-refresh-due {
+  background-color: #fdf6c6;
 }
 
 .month-due {

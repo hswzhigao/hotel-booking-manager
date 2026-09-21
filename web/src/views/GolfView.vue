@@ -2,7 +2,7 @@
   <div class="page-card">
     <!-- 筛选区 -->
     <el-card shadow="never">
-      <div class="page-toolbar">
+      <div class="page-toolbar desktop-toolbar">
         <el-select v-model="filters.customer_id" placeholder="客户" clearable filterable style="width: 150px">
           <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
         </el-select>
@@ -34,7 +34,45 @@
         <el-button type="primary" :icon="Plus" @click="openCreate">新建订单</el-button>
       </div>
 
-      <!-- 列表 -->
+      <!-- 移动端工具栏 -->
+      <div class="mobile-toolbar">
+        <el-input
+          v-model="filters.search"
+          class="toolbar-search"
+          placeholder="客户名 / 球场名关键词"
+          clearable
+          @keyup.enter="loadList(1)"
+        />
+        <el-button type="primary" @click="loadList(1)">查询</el-button>
+        <el-button @click="filtersExpanded = !filtersExpanded">
+          {{ filtersExpanded ? '收起筛选' : '筛选' }}
+        </el-button>
+        <el-button type="primary" :icon="Plus" circle title="新建订单" @click="openCreate" />
+        <div v-show="filtersExpanded" class="filter-extra">
+          <el-select v-model="filters.customer_id" placeholder="客户" clearable filterable>
+            <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+          <el-select v-model="filters.benefit_holder_id" placeholder="预订人" clearable filterable>
+            <el-option v-for="h in holderOptions" :key="h.id" :label="h.name" :value="h.id" />
+          </el-select>
+          <el-select v-model="filters.status" placeholder="状态" clearable>
+            <el-option v-for="(m, k) in GOLF_STATUS_MAP" :key="k" :label="m.label" :value="k" />
+          </el-select>
+          <el-date-picker
+            v-model="filters.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="打球起"
+            end-placeholder="打球止"
+          />
+          <el-button @click="resetFilters">重置</el-button>
+          
+        </div>
+      </div>
+
+      <!-- 列表：桌面表格 / 移动卡片 -->
+      <div class="desktop-table">
       <el-table :data="rows" v-loading="loading" empty-text="暂无高尔夫订单">
         <el-table-column label="下单时间" width="160">
           <template #default="{ row }">{{ datetimeText(row.order_time) }}</template>
@@ -86,6 +124,46 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <!-- 移动端卡片列表 -->
+      <div class="mobile-cards" v-loading="loading">
+        <el-empty v-if="!rows.length" description="暂无高尔夫订单" :image-size="60" />
+        <div v-for="row in rows" :key="row.id" class="m-card">
+          <div class="m-title">
+            <span class="m-name">{{ row.customer_name }}</span>
+            <el-tag :type="golfStatusMeta(row.status).type" size="small">
+              {{ golfStatusMeta(row.status).label }}
+            </el-tag>
+          </div>
+          <div class="m-sub">{{ row.course_name }}</div>
+          <div class="m-line">
+            <span class="m-label">日期/人数</span>
+            <span class="m-value">{{ dateText(row.play_date) }} · {{ row.players }}人</span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">卖价/利润</span>
+            <span class="m-value">
+              <span class="money">{{ money(row.sale_price) }}</span>
+              /
+              <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
+            </span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">权益</span>
+            <span class="m-value">
+              <el-tag v-if="row.benefit_type_name" type="warning" size="small">{{ row.benefit_type_name }}</el-tag>
+              <span v-else>-</span>
+              <span v-if="row.benefit_holder_name"> · {{ row.benefit_holder_name }}</span>
+              <el-tag v-if="row.teach_needed" type="warning" size="small" class="due-tag">教定位</el-tag>
+            </span>
+          </div>
+          <div class="m-actions">
+            <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button text type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          </div>
+        </div>
+      </div>
 
       <el-pagination
         class="pager"
@@ -298,6 +376,9 @@ function holderGolfTotal(h) {
 }
 
 // ===== 列表 =====
+// 移动端筛选折叠开关（桌面端由 CSS display:contents 还原平铺，不受影响）
+const filtersExpanded = ref(false)
+
 const loading = ref(false)
 const rows = ref([])
 const total = ref(0)

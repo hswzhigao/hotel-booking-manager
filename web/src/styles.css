@@ -47,3 +47,226 @@ body,
   --el-tag-border-color: #3e9e2b;
   --el-tag-text-color: #1f6b10;
 }
+
+/* ===== V4 移动端适配：断点 768px，纯 CSS 媒体查询切换，桌面端（≥768px）不受影响 ===== */
+
+/* 同页双列表：桌面显示表格 / 移动显示卡片（JS 无感知） */
+.mobile-cards {
+  display: none;
+}
+
+/* 双工具栏：桌面工具栏保持原样；移动工具栏（含筛选折叠）仅 <768px 显示 */
+.mobile-toolbar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* 容器与间距收紧 */
+  body {
+    overflow-x: hidden;
+  }
+
+  .page-card {
+    margin: 8px;
+  }
+
+  .page-toolbar {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .el-card__body {
+    padding: 12px;
+  }
+
+  /* 双工具栏切换：桌面工具栏隐藏，移动工具栏显示 */
+  .desktop-toolbar {
+    display: none;
+  }
+
+  .mobile-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+  }
+
+  /* 筛选区折叠：默认一行（关键词 + 查询 + 筛选开关），展开后 v-show 恢复显示其余筛选项 */
+  .toolbar-search {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .filter-extra {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .filter-extra > .el-select,
+  .filter-extra > .el-date-editor {
+    width: 100% !important;
+  }
+
+  /* 同页双列表切换 */
+  .desktop-table {
+    display: none;
+  }
+
+  .mobile-cards {
+    display: block;
+  }
+
+  /* 移动卡片基础样式（每行数据一张卡） */
+  .m-card {
+    background: #fff;
+    border: 1px solid #e4e7ed;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+
+  .m-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .m-name {
+    font-size: 15px;
+    font-weight: 600;
+    color: #303133;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .m-tags {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .m-sub {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #606266;
+  }
+
+  .m-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    font-size: 13px;
+    color: #303133;
+    padding: 2px 0;
+  }
+
+  .m-label {
+    color: #909399;
+    flex-shrink: 0;
+  }
+
+  .m-value {
+    text-align: right;
+    word-break: break-all;
+  }
+
+  .m-summary {
+    font-size: 12px;
+    color: #909399;
+  }
+
+  .m-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid #f0f2f5;
+  }
+
+  /* 操作按钮触控区 ≥40px */
+  .m-actions .el-button {
+    min-height: 40px;
+    padding: 0 12px;
+    margin-left: 0;
+  }
+
+  .m-actions .el-button + .el-button {
+    margin-left: 8px;
+  }
+
+  /* 抽屉全宽（压过组件 :size 内联样式）；菜单抽屉保持 70% */
+  .el-drawer {
+    width: 100% !important;
+  }
+
+  .el-drawer.mobile-menu-drawer {
+    width: 70% !important;
+  }
+
+  .el-drawer__body {
+    padding: 12px;
+  }
+
+  /* 对话框 92% 宽，纵向自适应滚动（长表单不出屏） */
+  .el-dialog {
+    width: 92% !important;
+    margin: 5vh auto !important;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .el-dialog .el-dialog__header,
+  .el-dialog .el-dialog__footer {
+    flex-shrink: 0;
+  }
+
+  .el-dialog .el-dialog__body {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  /* 确认框不出屏 */
+  .el-message-box {
+    width: auto;
+    max-width: 88vw;
+  }
+
+  /* 分页器换行居中，不横向溢出 */
+  .el-pagination {
+    flex-wrap: wrap;
+    justify-content: center !important;
+    white-space: normal;
+    row-gap: 8px;
+  }
+}
+
+/* ===== V4 移动端补充：日期范围选择面板堆叠（两个月份上下排列，适配 375px） ===== */
+@media (max-width: 768px) {
+  .el-date-range-picker {
+    width: 322px !important;
+  }
+  .el-date-range-picker.has-sidebar {
+    width: 322px !important;
+  }
+  .el-date-range-picker__body {
+    min-width: auto !important;
+  }
+  .el-date-range-picker__content {
+    float: none !important;
+    width: 100% !important;
+    padding: 8px 5px !important;
+  }
+  .el-picker-panel__body::after,
+  .el-date-range-picker__body::after {
+    content: none !important;
+  }
+}

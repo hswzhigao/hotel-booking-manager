@@ -83,6 +83,14 @@ async function onSubmit() {
   padding: 8px 12px;
 }
 
+/* V4 移动端：登录卡不出屏 */
+@media (max-width: 768px) {
+  .login-card {
+    width: calc(100% - 32px);
+    max-width: 380px;
+  }
+}
+
 .login-title {
   text-align: center;
   margin: 4px 0 24px;

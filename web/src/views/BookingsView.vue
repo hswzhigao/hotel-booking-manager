@@ -1,8 +1,8 @@
 <template>
   <div class="page-card">
-    <!-- 筛选区 -->
+    <!-- 筛选区：桌面工具栏保持原样；<768px 用下方移动工具栏（关键词+查询+筛选开关，展开显示其余筛选） -->
     <el-card shadow="never">
-      <div class="page-toolbar">
+      <div class="page-toolbar desktop-toolbar">
         <el-select
           v-model="filters.customer_id"
           placeholder="客户"
@@ -56,8 +56,46 @@
         <el-button type="primary" :icon="Plus" @click="openCreate">新建预定</el-button>
       </div>
 
-      <!-- 列表 -->
-      <el-table :data="rows" v-loading="loading" empty-text="暂无预定数据">
+      <!-- 移动端工具栏：一行（关键词+查询+筛选开关），展开显示其余筛选与操作 -->
+      <div class="mobile-toolbar">
+        <el-input
+          v-model="filters.search"
+          class="toolbar-search"
+          placeholder="客户名 / 酒店名关键词"
+          clearable
+          @keyup.enter="loadList(1)"
+        />
+        <el-button type="primary" @click="loadList(1)">查询</el-button>
+        <el-button @click="filtersExpanded = !filtersExpanded">
+          {{ filtersExpanded ? '收起筛选' : '筛选' }}
+        </el-button>
+        <el-button type="primary" :icon="Plus" circle title="新建预定" @click="openCreate" />
+        <div v-show="filtersExpanded" class="filter-extra">
+          <el-select v-model="filters.customer_id" placeholder="客户" clearable filterable>
+            <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+          <el-select v-model="filters.hotel_id" placeholder="酒店" clearable filterable>
+            <el-option v-for="h in hotelOptions" :key="h.id" :label="h.name" :value="h.id" />
+          </el-select>
+          <el-select v-model="filters.status" placeholder="状态" clearable>
+            <el-option v-for="(m, k) in STATUS_MAP" :key="k" :label="m.label" :value="k" />
+          </el-select>
+          <el-date-picker
+            v-model="filters.dateRange"
+            type="daterange"
+            value-format="YYYY-MM-DD"
+            range-separator="至"
+            start-placeholder="入住起"
+            end-placeholder="入住止"
+          />
+          <el-button @click="resetFilters">重置</el-button>
+          
+        </div>
+      </div>
+
+      <!-- 列表：桌面表格 / 移动卡片（同一份 rows 数据，CSS 切换） -->
+      <div class="desktop-table">
+        <el-table :data="rows" v-loading="loading" empty-text="暂无预定数据">
         <el-table-column label="下单时间" width="165">
           <template #default="{ row }">{{ datetimeText(row.order_time) }}</template>
         </el-table-column>
@@ -131,6 +169,56 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <!-- 移动端卡片列表（.mobile-cards：<768px 显示） -->
+      <div class="mobile-cards" v-loading="loading">
+        <el-empty v-if="!rows.length" description="暂无预定数据" :image-size="60" />
+        <div v-for="row in rows" :key="row.id" class="m-card">
+          <div class="m-title">
+            <span class="m-name">{{ row.customer_name }}</span>
+            <el-tag :type="statusMeta(row.status).type" :class="statusMeta(row.status).cls" size="small">
+              {{ statusMeta(row.status).label }}
+            </el-tag>
+          </div>
+          <div class="m-sub">{{ row.hotel_name }}</div>
+          <div class="m-line">
+            <span class="m-label">入住/离店</span>
+            <span class="m-value">{{ dateText(row.check_in) }} ~ {{ dateText(row.check_out) }}（{{ row.nights }}晚/{{ row.room_count }}间）</span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">明细</span>
+            <span class="m-value">{{ row.items_summary || '-' }}</span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">卖价/利润</span>
+            <span class="m-value">
+              <span class="money">{{ money(row.sale_total) }}</span>
+              /
+              <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
+            </span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">权益</span>
+            <span class="m-value">
+              <template v-if="row.benefit_used">
+                已用{{ row.benefit_count_used > 1 ? `×${row.benefit_count_used}` : '' }}{{ row.benefit_holder_name ? `（${row.benefit_holder_name}）` : '' }}
+              </template>
+              <template v-else>-</template>
+            </span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">下单时间</span>
+            <span class="m-value">{{ datetimeText(row.order_time) }}</span>
+          </div>
+          <div class="m-actions">
+            <el-button text type="primary" size="small" @click="openDetail(row)">详情</el-button>
+            <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button text type="primary" size="small" @click="openCopy(row)">复制</el-button>
+            <el-button text type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          </div>
+        </div>
+      </div>
 
       <el-pagination
         class="pager"
@@ -476,6 +564,9 @@ const rows = ref([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+// 移动端筛选折叠开关（桌面端由 CSS display:contents 还原平铺，不受影响）
+const filtersExpanded = ref(false)
+
 const filters = reactive({
   customer_id: null,
   hotel_id: null,

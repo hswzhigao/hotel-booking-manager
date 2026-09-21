@@ -1,7 +1,7 @@
 <template>
   <div class="page-card">
     <el-card shadow="never">
-      <div class="page-toolbar">
+      <div class="page-toolbar desktop-toolbar">
         <el-input
           v-model="filters.search"
           placeholder="搜索姓名 / 微信 / 电话"
@@ -23,6 +23,35 @@
         <el-button type="primary" :icon="Plus" @click="openCreate">新建客户</el-button>
       </div>
 
+      <!-- 移动端工具栏 -->
+      <div class="mobile-toolbar">
+        <el-input
+          v-model="filters.search"
+          class="toolbar-search"
+          placeholder="搜索姓名 / 微信 / 电话"
+          clearable
+          @keyup.enter="loadList(1)"
+        />
+        <el-button type="primary" @click="loadList(1)">查询</el-button>
+        <el-button @click="filtersExpanded = !filtersExpanded">
+          {{ filtersExpanded ? '收起筛选' : '筛选' }}
+        </el-button>
+        <el-button type="primary" :icon="Plus" circle title="新建客户" @click="openCreate" />
+        <div v-show="filtersExpanded" class="filter-extra">
+          <el-select v-model="filters.is_hotel" placeholder="酒店客户" clearable>
+            <el-option label="酒店客户" :value="1" />
+            <el-option label="非酒店客户" :value="0" />
+          </el-select>
+          <el-select v-model="filters.is_golf" placeholder="高尔夫客户" clearable>
+            <el-option label="高尔夫客户" :value="1" />
+            <el-option label="非高尔夫客户" :value="0" />
+          </el-select>
+          <el-button @click="resetFilters">重置</el-button>
+          
+        </div>
+      </div>
+
+      <div class="desktop-table">
       <el-table :data="rows" v-loading="loading" empty-text="暂无客户数据">
         <el-table-column prop="name" label="姓名" min-width="90" />
         <el-table-column prop="wechat" label="微信" min-width="110">
@@ -54,6 +83,43 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
+
+      <!-- 移动端卡片列表 -->
+      <div class="mobile-cards" v-loading="loading">
+        <el-empty v-if="!rows.length" description="暂无客户数据" :image-size="60" />
+        <div v-for="row in rows" :key="row.id" class="m-card">
+          <div class="m-title">
+            <span class="m-name">{{ row.name }}</span>
+            <span class="m-tags">
+              <el-tag v-if="row.is_hotel" type="primary" size="small">酒店</el-tag>
+              <el-tag v-if="row.is_golf" type="success" size="small" class="tag-gap">高尔夫</el-tag>
+              <span v-if="!row.is_hotel && !row.is_golf" class="m-summary">无标签</span>
+            </span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">微信</span>
+            <span class="m-value">{{ row.wechat || '-' }}</span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">电话</span>
+            <span class="m-value">{{ row.phone || '-' }}</span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">累计消费</span>
+            <span class="m-value money">{{ money(row.total_spend) }}</span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">间夜数</span>
+            <span class="m-value">{{ row.total_room_nights }}</span>
+          </div>
+          <div class="m-actions">
+            <el-button text type="primary" size="small" @click="openDetail(row)">详情</el-button>
+            <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button text type="danger" size="small" @click="onDelete(row)">删除</el-button>
+          </div>
+        </div>
+      </div>
 
       <el-pagination
         class="pager"
@@ -206,6 +272,9 @@ const rows = ref([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
+// 移动端筛选折叠开关（桌面端由 CSS display:contents 还原平铺，不受影响）
+const filtersExpanded = ref(false)
+
 const filters = reactive({
   search: '',
   is_hotel: null,
