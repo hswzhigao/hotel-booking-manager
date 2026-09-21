@@ -45,9 +45,7 @@ CREATE TABLE IF NOT EXISTS benefit_holders (
   willing_assist TINYINT(1) NOT NULL DEFAULT 0,
   active TINYINT(1) NOT NULL DEFAULT 1,
   hotel_benefit_count INT NOT NULL DEFAULT 0,
-  golf_benefit_count INT NOT NULL DEFAULT 0,
   hotel_refresh_month TINYINT DEFAULT NULL,
-  golf_refresh_month TINYINT DEFAULT NULL,
   availability ENUM('any','weekend_only','weekday_only') NOT NULL DEFAULT 'any',
   notes VARCHAR(500) DEFAULT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -96,6 +94,28 @@ CREATE TABLE IF NOT EXISTS booking_items (
   CONSTRAINT fk_bi_room FOREIGN KEY (room_type_id) REFERENCES room_types(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS golf_benefit_types (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL UNIQUE,
+  course_scope VARCHAR(200) NOT NULL DEFAULT 'all',
+  notes VARCHAR(500) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS holder_golf_benefits (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  holder_id INT UNSIGNED NOT NULL,
+  benefit_type_id INT UNSIGNED NOT NULL,
+  count_left INT NOT NULL DEFAULT 0,
+  refresh_month TINYINT DEFAULT NULL,
+  notes VARCHAR(500) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_hgb_holder FOREIGN KEY (holder_id) REFERENCES benefit_holders(id) ON DELETE CASCADE,
+  CONSTRAINT fk_hgb_type FOREIGN KEY (benefit_type_id) REFERENCES golf_benefit_types(id),
+  UNIQUE KEY uk_holder_type (holder_id, benefit_type_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS golf_orders (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   customer_id INT UNSIGNED NOT NULL,
@@ -110,10 +130,12 @@ CREATE TABLE IF NOT EXISTS golf_orders (
   cost_price DECIMAL(10,2) NOT NULL DEFAULT 0,
   channel VARCHAR(20) NOT NULL DEFAULT 'xianyu',
   benefit_used TINYINT(1) NOT NULL DEFAULT 1,
+  benefit_type_id INT UNSIGNED DEFAULT NULL,
   order_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   notes VARCHAR(500) DEFAULT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_go_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
-  CONSTRAINT fk_go_holder FOREIGN KEY (benefit_holder_id) REFERENCES benefit_holders(id)
+  CONSTRAINT fk_go_holder FOREIGN KEY (benefit_holder_id) REFERENCES benefit_holders(id),
+  CONSTRAINT fk_go_type FOREIGN KEY (benefit_type_id) REFERENCES golf_benefit_types(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

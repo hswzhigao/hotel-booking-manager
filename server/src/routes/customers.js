@@ -23,7 +23,7 @@ router.get('/', async (req, res, next) => {
     const { search = '', is_hotel, is_golf, page = 1, page_size = 20 } = req.query;
     const like = `%${search}%`;
     const where = []; const params = [];
-    if (search) { where.push('c.name LIKE ? OR c.wechat LIKE ? OR c.phone LIKE ?'); params.push(like, like, like); }
+    if (search) { where.push('(c.name LIKE ? OR c.wechat LIKE ? OR c.phone LIKE ?)'); params.push(like, like, like); }
     if (is_hotel !== undefined && is_hotel !== '') { where.push('c.is_hotel = ?'); params.push(Number(is_hotel) === 1 ? 1 : 0); }
     if (is_golf !== undefined && is_golf !== '') { where.push('c.is_golf = ?'); params.push(Number(is_golf) === 1 ? 1 : 0); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
@@ -64,10 +64,8 @@ router.get('/:id', async (req, res, next) => {
     }
     bookings.forEach(b => { b.items = itemsMap[b.id] || []; });
     const [golfOrders] = await pool.query(
-      `SELECT g.*, bh.name benefit_holder_name, (g.sale_price - g.cost_price) profit,
-        CASE WHEN bh.availability = 'weekend_only' THEN '仅周末'
-             WHEN bh.availability = 'weekday_only' THEN '仅工作日'
-             ELSE '不限' END holder_availability
+      `SELECT g.*, bh.name benefit_holder_name, bh.availability holder_availability,
+        (g.sale_price - g.cost_price) profit
       FROM golf_orders g LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
       WHERE g.customer_id = ? ORDER BY g.order_time DESC, g.id DESC`, [req.params.id]
     );

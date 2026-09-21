@@ -5,8 +5,17 @@ const auth = require('../middleware/auth');
 router.use(auth);
 
 const AVAILABILITIES = ['any', 'weekend_only', 'weekday_only'];
+const GOLF_BENEFITS_SQL = `
+  (SELECT COALESCE(JSON_ARRAYAGG(JSON_OBJECT(
+      'id', hgb.id, 'benefit_type_id', hgb.benefit_type_id,
+      'type_name', t.name, 'course_scope', t.course_scope,
+      'count_left', hgb.count_left, 'refresh_month', hgb.refresh_month, 'notes', hgb.notes
+    )), JSON_ARRAY())
+   FROM holder_golf_benefits hgb JOIN golf_benefit_types t ON t.id = hgb.benefit_type_id
+   WHERE hgb.holder_id = h.id) golf_benefits,
+  (SELECT COALESCE(SUM(hgb.count_left), 0) FROM holder_golf_benefits hgb WHERE hgb.holder_id = h.id) golf_benefit_total`;
 
-// 规整字段：布尔/枚举/整数月份与次数校验
+// 基本字段校验（不含高尔夫明细）
 function holderFields(body) {
   const b = body || {};
   const bool = v => Number(v) === 1 ? 1 : 0;
@@ -39,12 +48,62 @@ function holderFields(body) {
     willing_assist: bool(b.willing_assist),
     active: bool(b.active === undefined ? 1 : b.active),
     hotel_benefit_count: count(b.hotel_benefit_count, '酒店权益次数'),
-    golf_benefit_count: count(b.golf_benefit_count, '高尔夫权益次数'),
     hotel_refresh_month: month(b.hotel_refresh_month),
-    golf_refresh_month: month(b.golf_refresh_month),
-    availability: AVAILABILITIES.includes(b.availability) ? b.availability : (b.availability === undefined || b.availability === null || b.availability === '' ? 'any' : null),
+    availability: AVAILABILITIES.includes(b.availability) ? b.availability : 'any',
     notes: b.notes || null,
   };
+}
+
+// 高尔夫明细数组校验：[{benefit_type_id, count_left, refresh_month, notes}]
+async function normalizeGolfBenefits(arr) {
+  if (arr === undefined || arr === null) return null; // 未传=不动
+  if (!Array.isArray(arr)) {
+    const e = new Error('golf_benefits 应为数组'); e.status = 400; throw e;
+  }
+  const seen = new Set();
+  const rows = [];
+  for (const r of arr) {
+    const tid = Number(r && r.benefit_type_id);
+    if (!Number.isInteger(tid) || tid < 1) {
+      const e = new Error('持有权益缺少有效的权益种类'); e.status = 400; throw e;
+    }
+    if (seen.has(tid)) {
+      const e = new Error('同一权益种类只能有一行明细'); e.status = 400; throw e;
+    }
+    seen.add(tid);
+    const cl = Number(r.count_left) || 0;
+    if (!Number.isInteger(cl) || cl < 0) {
+      const e = new Error('权益次数不合法'); e.status = 400; throw e;
+    }
+    let rm = null;
+    if (r.refresh_month !== null && r.refresh_month !== undefined && r.refresh_month !== '') {
+      rm = Number(r.refresh_month);
+      if (!Number.isInteger(rm) || rm < 1 || rm > 12) {
+        const e = new Error('更新月应为 1-12 或留空（未知）'); e.status = 400; throw e;
+      }
+    }
+    rows.push({ benefit_type_id: tid, count_left: cl, refresh_month: rm, notes: r.notes || null });
+  }
+  // 校验种类都存在
+  if (rows.length) {
+    const [ts] = await pool.query('SELECT id, name FROM golf_benefit_types WHERE id IN (?)', [rows.map(r => r.benefit_type_id)]);
+    if (ts.length !== rows.length) {
+      const e = new Error('存在无效的权益种类'); e.status = 400; throw e;
+    }
+  }
+  return rows; // [] = 清空，null = 未传不动
+}
+
+// 整组替换高尔夫明细（事务内）
+async function replaceGolfBenefits(conn, holderId, rows) {
+  if (rows === null) return;
+  await conn.query('DELETE FROM holder_golf_benefits WHERE holder_id = ?', [holderId]);
+  for (const r of rows) {
+    await conn.query(
+      'INSERT INTO holder_golf_benefits (holder_id, benefit_type_id, count_left, refresh_month, notes) VALUES (?,?,?,?,?)',
+      [holderId, r.benefit_type_id, r.count_left, r.refresh_month, r.notes]
+    );
+  }
 }
 
 // 预订人列表（搜索 + 标签筛选）
@@ -75,7 +134,7 @@ router.get('/', async (req, res, next) => {
     const size = Math.min(100, Number(page_size) || 20);
     const offset = (Math.max(1, Number(page) || 1) - 1) * size;
     const [rows] = await pool.query(
-      `SELECT h.*,
+      `SELECT h.*, ${GOLF_BENEFITS_SQL},
         (SELECT COUNT(*) FROM bookings b WHERE b.benefit_holder_id = h.id) booking_count,
         (SELECT COUNT(*) FROM golf_orders g WHERE g.benefit_holder_id = h.id) golf_order_count
       FROM benefit_holders h ${whereSql} ORDER BY h.active DESC, h.id DESC LIMIT ? OFFSET ?`,
@@ -86,29 +145,45 @@ router.get('/', async (req, res, next) => {
 });
 
 router.post('/', async (req, res, next) => {
+  const conn = await pool.getConnection();
   try {
     const f = holderFields(req.body);
     if (!f.name) return res.status(400).json({ error: '预订人姓名不能为空' });
-    const [ins] = await pool.query(
-      `INSERT INTO benefit_holders (name, wechat, phone, benefit_types, card_type, willing_present, willing_assist, active, hotel_benefit_count, golf_benefit_count, hotel_refresh_month, golf_refresh_month, availability, notes)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [f.name, f.wechat, f.phone, f.benefit_types, f.card_type, f.willing_present, f.willing_assist, f.active, f.hotel_benefit_count, f.golf_benefit_count, f.hotel_refresh_month, f.golf_refresh_month, f.availability, f.notes]
+    const golfRows = await normalizeGolfBenefits(req.body && req.body.golf_benefits);
+    await conn.beginTransaction();
+    const [ins] = await conn.query(
+      `INSERT INTO benefit_holders (name, wechat, phone, benefit_types, card_type, willing_present, willing_assist, active, hotel_benefit_count, hotel_refresh_month, availability, notes)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [f.name, f.wechat, f.phone, f.benefit_types, f.card_type, f.willing_present, f.willing_assist, f.active, f.hotel_benefit_count, f.hotel_refresh_month, f.availability, f.notes]
     );
+    await replaceGolfBenefits(conn, ins.insertId, golfRows || []);
+    await conn.commit();
     res.json({ id: ins.insertId });
-  } catch (e) { next(e); }
+  } catch (e) {
+    await conn.rollback().catch(() => {});
+    next(e);
+  } finally { conn.release(); }
 });
 
 router.put('/:id', async (req, res, next) => {
+  const conn = await pool.getConnection();
   try {
     const f = holderFields(req.body);
     if (!f.name) return res.status(400).json({ error: '预订人姓名不能为空' });
-    const [r] = await pool.query(
-      `UPDATE benefit_holders SET name=?, wechat=?, phone=?, benefit_types=?, card_type=?, willing_present=?, willing_assist=?, active=?, hotel_benefit_count=?, golf_benefit_count=?, hotel_refresh_month=?, golf_refresh_month=?, availability=?, notes=? WHERE id=?`,
-      [f.name, f.wechat, f.phone, f.benefit_types, f.card_type, f.willing_present, f.willing_assist, f.active, f.hotel_benefit_count, f.golf_benefit_count, f.hotel_refresh_month, f.golf_refresh_month, f.availability, f.notes, req.params.id]
+    const golfRows = await normalizeGolfBenefits(req.body && req.body.golf_benefits);
+    await conn.beginTransaction();
+    const [r] = await conn.query(
+      `UPDATE benefit_holders SET name=?, wechat=?, phone=?, benefit_types=?, card_type=?, willing_present=?, willing_assist=?, active=?, hotel_benefit_count=?, hotel_refresh_month=?, availability=?, notes=? WHERE id=?`,
+      [f.name, f.wechat, f.phone, f.benefit_types, f.card_type, f.willing_present, f.willing_assist, f.active, f.hotel_benefit_count, f.hotel_refresh_month, f.availability, f.notes, req.params.id]
     );
-    if (r.affectedRows === 0) return res.status(404).json({ error: '预订人不存在' });
+    if (r.affectedRows === 0) { await conn.rollback(); return res.status(404).json({ error: '预订人不存在' }); }
+    await replaceGolfBenefits(conn, Number(req.params.id), golfRows);
+    await conn.commit();
     res.json({ ok: true });
-  } catch (e) { next(e); }
+  } catch (e) {
+    await conn.rollback().catch(() => {});
+    next(e);
+  } finally { conn.release(); }
 });
 
 router.delete('/:id', async (req, res, next) => {

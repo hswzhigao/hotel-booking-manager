@@ -22,11 +22,18 @@ function parseOrderTime(s) {
   return bad(400, '下单时间格式不合法');
 }
 
+// 球场是否在种类适用范围内（scope='all' 或球场名在逗号列表中精确匹配）
+function scopeCovers(scope, courseName) {
+  if (!scope) return false;
+  if (scope.trim() === 'all') return true;
+  return scope.split(',').map(x => x.trim()).filter(Boolean).includes(courseName);
+}
+
 // 校验并规整高尔夫订单入参
 async function validatePayload(body) {
   const { customer_id, benefit_holder_id, course_name, play_date, tee_time, players = 1,
           status = 'pending', teach_needed = 0, sale_price = 0, cost_price = 0,
-          channel = 'xianyu', benefit_used = 1, order_time, notes } = body || {};
+          channel = 'xianyu', benefit_used = 1, benefit_type_id, order_time, notes } = body || {};
   if (!customer_id) bad(400, '请选择客户');
   const pd = parseDate(play_date);
   if (!pd) bad(400, '打球日期格式应为 YYYY-MM-DD');
@@ -48,14 +55,49 @@ async function validatePayload(body) {
     if (!holder) bad(400, '预订人不存在');
     holderId = Number(benefit_holder_id);
   }
-  // 勾权益必须选预订人
-  if (bu === 1 && holderId === null) bad(400, '使用高尔夫权益需选择预订人');
-  return { customer_id: Number(customer_id), holderId, courseName: String(course_name).trim(), playDate: pd,
+  // 勾权益必须选预订人 + 权益种类
+  let typeId = null;
+  if (bu === 1) {
+    if (holderId === null) bad(400, '使用高尔夫权益需选择预订人');
+    if (!benefit_type_id) bad(400, '使用高尔夫权益需选择权益种类');
+    const [[type]] = await pool.query('SELECT id, name, course_scope FROM golf_benefit_types WHERE id = ?', [benefit_type_id]);
+    if (!type) bad(400, '权益种类不存在');
+    if (!scopeCovers(type.course_scope, String(course_name).trim())) {
+      bad(400, `该权益（${type.name}）不能在 ${String(course_name).trim()} 使用`);
+    }
+    const [[held]] = await pool.query(
+      'SELECT id, count_left FROM holder_golf_benefits WHERE holder_id = ? AND benefit_type_id = ?', [holderId, type.id]
+    );
+    if (!held) bad(400, '该预订人未持有此权益种类');
+    typeId = type.id;
+  } else if (benefit_type_id !== undefined && benefit_type_id !== null && benefit_type_id !== '') {
+    // 不勾权益但传了种类：仅校验存在性，便于展示
+    const [[type]] = await pool.query('SELECT id FROM golf_benefit_types WHERE id = ?', [benefit_type_id]);
+    if (!type) bad(400, '权益种类不存在');
+    typeId = type.id;
+  }
+  return { customer_id: Number(customer_id), holderId, typeId, courseName: String(course_name).trim(), playDate: pd,
            teeTime: tee_time || null, players: pl, status, teachNeeded: tn, salePrice: sp, costPrice: cp,
            channel, benefitUsed: bu, orderTime: ot, notes: notes || null };
 }
 
 const effectiveUse = (benefitUsed, status) => (Number(benefitUsed) === 1 && status !== 'cancelled') ? 1 : 0;
+
+// 权益占用调整：'-' 扣一行，'+' 返还一行（原子防透支）
+async function adjustBenefit(conn, sign, holderId, typeId) {
+  if (sign === '-') {
+    const [c] = await conn.query(
+      'UPDATE holder_golf_benefits SET count_left = count_left - 1 WHERE holder_id = ? AND benefit_type_id = ? AND count_left >= 1',
+      [holderId, typeId]
+    );
+    if (c.affectedRows === 0) bad(400, '该权益种类剩余次数不足');
+  } else {
+    await conn.query(
+      'UPDATE holder_golf_benefits SET count_left = count_left + 1 WHERE holder_id = ? AND benefit_type_id = ?',
+      [holderId, typeId]
+    );
+  }
+}
 
 // 订单列表
 router.get('/', async (req, res, next) => {
@@ -84,12 +126,13 @@ router.get('/', async (req, res, next) => {
     const size = Math.min(100, Number(page_size) || 20);
     const offset = (Math.max(1, Number(page) || 1) - 1) * size;
     const [rows] = await pool.query(
-      `SELECT g.*, c.name customer_name, bh.name benefit_holder_name,
+      `SELECT g.*, c.name customer_name, bh.name benefit_holder_name, t.name benefit_type_name,
         bh.availability holder_availability,
         (g.sale_price - g.cost_price) profit
       FROM golf_orders g
       JOIN customers c ON c.id = g.customer_id
       LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
+      LEFT JOIN golf_benefit_types t ON t.id = g.benefit_type_id
       ${whereSql} ORDER BY g.order_time DESC, g.id DESC LIMIT ? OFFSET ?`,
       [...params, size, offset]
     );
@@ -110,10 +153,11 @@ router.get('/:id', async (req, res, next) => {
   try {
     const [rows] = await pool.query(
       `SELECT g.*, c.name customer_name, bh.name benefit_holder_name, bh.availability holder_availability,
-        (g.sale_price - g.cost_price) profit
+        t.name benefit_type_name, (g.sale_price - g.cost_price) profit
       FROM golf_orders g
       JOIN customers c ON c.id = g.customer_id
       LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
+      LEFT JOIN golf_benefit_types t ON t.id = g.benefit_type_id
       WHERE g.id = ?`, [req.params.id]
     );
     if (!rows.length) bad(404, '高尔夫订单不存在');
@@ -121,24 +165,21 @@ router.get('/:id', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// 新建（扣高尔夫权益）
+// 新建（扣对应种类明细）
 router.post('/', async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
     const p = await validatePayload(req.body);
     await conn.beginTransaction();
-    const cols = ['customer_id', 'benefit_holder_id', 'course_name', 'play_date', 'tee_time', 'players', 'status', 'teach_needed', 'sale_price', 'cost_price', 'channel', 'benefit_used', 'notes'];
-    const vals = [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.channel, p.benefitUsed, p.notes];
+    const cols = ['customer_id', 'benefit_holder_id', 'course_name', 'play_date', 'tee_time', 'players', 'status', 'teach_needed', 'sale_price', 'cost_price', 'channel', 'benefit_used', 'benefit_type_id', 'notes'];
+    const vals = [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.channel, p.benefitUsed, p.typeId, p.notes];
     if (p.orderTime) { cols.push('order_time'); vals.push(p.orderTime); }
     const [ins] = await conn.query(
       `INSERT INTO golf_orders (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, vals
     );
     const id = ins.insertId;
     if (effectiveUse(p.benefitUsed, p.status) === 1) {
-      const [c] = await conn.query(
-        'UPDATE benefit_holders SET golf_benefit_count = golf_benefit_count - 1 WHERE id = ? AND golf_benefit_count >= 1', [p.holderId]
-      );
-      if (c.affectedRows === 0) { bad(400, '该预订人剩余高尔夫权益不足'); }
+      await adjustBenefit(conn, '-', p.holderId, p.typeId);
     }
     await conn.commit();
     res.json({ id });
@@ -148,7 +189,7 @@ router.post('/', async (req, res, next) => {
   } finally { conn.release(); }
 });
 
-// 编辑（差额/换人调整）
+// 编辑（占用变化按 预订人×种类 维度调整）
 router.put('/:id', async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
@@ -159,37 +200,32 @@ router.put('/:id', async (req, res, next) => {
     await conn.beginTransaction();
     if (p.orderTime) {
       await conn.query(
-        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, channel=?, benefit_used=?, order_time=?, notes=? WHERE id=?`,
-        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.channel, p.benefitUsed, p.orderTime, p.notes, id]
+        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, channel=?, benefit_used=?, benefit_type_id=?, order_time=?, notes=? WHERE id=?`,
+        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.channel, p.benefitUsed, p.typeId, p.orderTime, p.notes, id]
       );
     } else {
       await conn.query(
-        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, channel=?, benefit_used=?, notes=? WHERE id=?`,
-        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.channel, p.benefitUsed, p.notes, id]
+        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, channel=?, benefit_used=?, benefit_type_id=?, notes=? WHERE id=?`,
+        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.channel, p.benefitUsed, p.typeId, p.notes, id]
       );
     }
     const oldUse = effectiveUse(old.benefit_used, old.status);
     const newUse = effectiveUse(p.benefitUsed, p.status);
     const oldHolder = old.benefit_holder_id || null;
-    const newHolder = p.holderId;
-    if (oldHolder !== null && oldHolder === newHolder) {
+    const oldType = old.benefit_type_id || null;
+    const sameTarget = oldHolder !== null && oldHolder === p.holderId && oldType !== null && oldType === p.typeId;
+    if (sameTarget) {
       if (newUse === 1 && oldUse === 0) {
-        const [c] = await conn.query(
-          'UPDATE benefit_holders SET golf_benefit_count = golf_benefit_count - 1 WHERE id = ? AND golf_benefit_count >= 1', [newHolder]
-        );
-        if (c.affectedRows === 0) { bad(400, '该预订人剩余高尔夫权益不足'); }
+        await adjustBenefit(conn, '-', p.holderId, p.typeId);
       } else if (oldUse === 1 && newUse === 0) {
-        await conn.query('UPDATE benefit_holders SET golf_benefit_count = golf_benefit_count + 1 WHERE id = ?', [oldHolder]);
+        await adjustBenefit(conn, '+', oldHolder, oldType);
       }
     } else {
-      if (oldUse === 1 && oldHolder !== null) {
-        await conn.query('UPDATE benefit_holders SET golf_benefit_count = golf_benefit_count + 1 WHERE id = ?', [oldHolder]);
+      if (oldUse === 1 && oldHolder !== null && oldType !== null) {
+        await adjustBenefit(conn, '+', oldHolder, oldType);
       }
       if (newUse === 1) {
-        const [c] = await conn.query(
-          'UPDATE benefit_holders SET golf_benefit_count = golf_benefit_count - 1 WHERE id = ? AND golf_benefit_count >= 1', [newHolder]
-        );
-        if (c.affectedRows === 0) { bad(400, '该预订人剩余高尔夫权益不足'); }
+        await adjustBenefit(conn, '-', p.holderId, p.typeId);
       }
     }
     await conn.commit();
@@ -200,7 +236,7 @@ router.put('/:id', async (req, res, next) => {
   } finally { conn.release(); }
 });
 
-// 删除（返还）
+// 删除（返还对应种类明细）
 router.delete('/:id', async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
@@ -208,8 +244,8 @@ router.delete('/:id', async (req, res, next) => {
     const [[old]] = await conn.query('SELECT * FROM golf_orders WHERE id = ?', [id]);
     if (!old) bad(404, '高尔夫订单不存在');
     await conn.beginTransaction();
-    if (effectiveUse(old.benefit_used, old.status) === 1 && old.benefit_holder_id) {
-      await conn.query('UPDATE benefit_holders SET golf_benefit_count = golf_benefit_count + 1 WHERE id = ?', [old.benefit_holder_id]);
+    if (effectiveUse(old.benefit_used, old.status) === 1 && old.benefit_holder_id && old.benefit_type_id) {
+      await adjustBenefit(conn, '+', old.benefit_holder_id, old.benefit_type_id);
     }
     await conn.query('DELETE FROM golf_orders WHERE id = ?', [id]);
     await conn.commit();
