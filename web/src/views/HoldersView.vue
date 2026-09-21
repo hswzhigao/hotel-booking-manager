@@ -565,7 +565,8 @@ async function loadTypes() {
   typesLoading.value = true
   try {
     const data = await golfBenefitTypesApi.list()
-    benefitTypes.value = data.items || []
+    // 后端返回裸数组，兼容 {items} 形状
+    benefitTypes.value = Array.isArray(data) ? data : (data.items || [])
   } catch (e) {
     // 错误提示已由拦截器统一处理
   } finally {
