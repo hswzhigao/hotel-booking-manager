@@ -5,17 +5,17 @@ const auth = require('../middleware/auth');
 router.use(auth);
 
 const STATS_SQL = `
-  (SELECT COUNT(*) FROM bookings b WHERE b.customer_id = c.id AND b.status <> 'cancelled') booking_count,
+  (SELECT COUNT(*) FROM bookings b WHERE b.customer_id = c.id AND b.status NOT IN ('cancelled','communicating')) booking_count,
   (SELECT COALESCE(SUM(t.rc), 0) FROM (
      SELECT COUNT(*) rc FROM booking_items bi JOIN bookings b ON b.id = bi.booking_id
-     WHERE b.customer_id = c.id AND b.status <> 'cancelled' GROUP BY b.id
+     WHERE b.customer_id = c.id AND b.status NOT IN ('cancelled','communicating') GROUP BY b.id
    ) t) total_rooms,
   (SELECT COALESCE(SUM(t2.nt), 0) FROM (
      SELECT b.nights * COUNT(bi.id) nt FROM bookings b LEFT JOIN booking_items bi ON bi.booking_id = b.id
-     WHERE b.customer_id = c.id AND b.status <> 'cancelled' GROUP BY b.id, b.nights
+     WHERE b.customer_id = c.id AND b.status NOT IN ('cancelled','communicating') GROUP BY b.id, b.nights
    ) t2) total_room_nights,
   (SELECT COALESCE(SUM(b.sale_total), 0) FROM bookings b
-   WHERE b.customer_id = c.id AND b.status <> 'cancelled') total_spend`;
+   WHERE b.customer_id = c.id AND b.status NOT IN ('cancelled','communicating')) total_spend`;
 
 // 客户列表（含统计）
 router.get('/', async (req, res, next) => {

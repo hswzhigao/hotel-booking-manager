@@ -10,17 +10,17 @@ router.get('/summary', async (req, res, next) => {
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01 00:00:00`;
     const [[r]] = await pool.query(
       `SELECT
-        (SELECT COUNT(*) FROM bookings WHERE status <> 'cancelled') booking_count,
+        (SELECT COUNT(*) FROM bookings WHERE status NOT IN ('cancelled','communicating')) booking_count,
         (SELECT COALESCE(SUM(t.nt), 0) FROM (
            SELECT b.nights * COUNT(bi.id) nt FROM bookings b LEFT JOIN booking_items bi ON bi.booking_id = b.id
-           WHERE b.status <> 'cancelled' GROUP BY b.id, b.nights
+           WHERE b.status NOT IN ('cancelled','communicating') GROUP BY b.id, b.nights
          ) t) room_night_count,
-        (SELECT COALESCE(SUM(sale_total), 0) FROM bookings WHERE status <> 'cancelled') total_sale,
-        (SELECT COALESCE(SUM(cost_total), 0) FROM bookings WHERE status <> 'cancelled') total_cost,
+        (SELECT COALESCE(SUM(sale_total), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating')) total_sale,
+        (SELECT COALESCE(SUM(cost_total), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating')) total_cost,
         (SELECT COUNT(*) FROM customers) customer_count,
         (SELECT COUNT(*) FROM hotels) hotel_count,
-        (SELECT COALESCE(SUM(sale_total), 0) FROM bookings WHERE status <> 'cancelled' AND order_time >= ?) month_sale,
-        (SELECT COALESCE(SUM(cost_total), 0) FROM bookings WHERE status <> 'cancelled' AND order_time >= ?) month_cost`,
+        (SELECT COALESCE(SUM(sale_total), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating') AND order_time >= ?) month_sale,
+        (SELECT COALESCE(SUM(cost_total), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating') AND order_time >= ?) month_cost`,
       [monthStart, monthStart]
     );
     const [[g]] = await pool.query(
@@ -46,7 +46,7 @@ router.get('/summary', async (req, res, next) => {
         (b.sale_total - b.cost_total) profit
       FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id
       LEFT JOIN benefit_holders bh ON bh.id = b.benefit_holder_id
-      WHERE b.status <> 'cancelled'
+      WHERE b.status NOT IN ('cancelled','communicating')
       ORDER BY b.created_at DESC, b.id DESC LIMIT 10`
     );
     const ids = recent.map(r => r.id);

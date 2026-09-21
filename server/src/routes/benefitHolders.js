@@ -38,12 +38,16 @@ function holderFields(body) {
   if (b.availability !== undefined && b.availability !== null && b.availability !== '' && !AVAILABILITIES.includes(b.availability)) {
     const e = new Error('可用时间不合法'); e.status = 400; throw e;
   }
+  if (b.source_channel !== undefined && b.source_channel !== null && b.source_channel !== '' && !['xianyu','wechat','other'].includes(b.source_channel)) {
+    const e = new Error('来源渠道不合法（xianyu/wechat/other）'); e.status = 400; throw e;
+  }
   return {
     name: String(b.name || '').trim(),
     wechat: b.wechat || null,
     phone: b.phone || null,
     benefit_types: b.benefit_types || null,
     card_type: b.card_type || null,
+    source_channel: ['xianyu','wechat','other'].includes(b.source_channel) ? b.source_channel : 'other',
     willing_present: bool(b.willing_present),
     willing_assist: bool(b.willing_assist),
     active: bool(b.active === undefined ? 1 : b.active),
@@ -155,9 +159,9 @@ router.post('/', async (req, res, next) => {
     const golfRows = await normalizeGolfBenefits(req.body && req.body.golf_benefits);
     await conn.beginTransaction();
     const [ins] = await conn.query(
-      `INSERT INTO benefit_holders (name, wechat, phone, benefit_types, card_type, willing_present, willing_assist, active, hotel_benefit_count, hotel_refresh_month, availability, notes)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [f.name, f.wechat, f.phone, f.benefit_types, f.card_type, f.willing_present, f.willing_assist, f.active, f.hotel_benefit_count, f.hotel_refresh_month, f.availability, f.notes]
+      `INSERT INTO benefit_holders (name, wechat, phone, benefit_types, card_type, source_channel, willing_present, willing_assist, active, hotel_benefit_count, hotel_refresh_month, availability, notes)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [f.name, f.wechat, f.phone, f.benefit_types, f.card_type, f.source_channel, f.willing_present, f.willing_assist, f.active, f.hotel_benefit_count, f.hotel_refresh_month, f.availability, f.notes]
     );
     await replaceGolfBenefits(conn, ins.insertId, golfRows || []);
     await conn.commit();
@@ -176,8 +180,8 @@ router.put('/:id', async (req, res, next) => {
     const golfRows = await normalizeGolfBenefits(req.body && req.body.golf_benefits);
     await conn.beginTransaction();
     const [r] = await conn.query(
-      `UPDATE benefit_holders SET name=?, wechat=?, phone=?, benefit_types=?, card_type=?, willing_present=?, willing_assist=?, active=?, hotel_benefit_count=?, hotel_refresh_month=?, availability=?, notes=? WHERE id=?`,
-      [f.name, f.wechat, f.phone, f.benefit_types, f.card_type, f.willing_present, f.willing_assist, f.active, f.hotel_benefit_count, f.hotel_refresh_month, f.availability, f.notes, req.params.id]
+      `UPDATE benefit_holders SET name=?, wechat=?, phone=?, benefit_types=?, card_type=?, source_channel=?, willing_present=?, willing_assist=?, active=?, hotel_benefit_count=?, hotel_refresh_month=?, availability=?, notes=? WHERE id=?`,
+      [f.name, f.wechat, f.phone, f.benefit_types, f.card_type, f.source_channel, f.willing_present, f.willing_assist, f.active, f.hotel_benefit_count, f.hotel_refresh_month, f.availability, f.notes, req.params.id]
     );
     if (r.affectedRows === 0) { await conn.rollback(); return res.status(404).json({ error: '预订人不存在' }); }
     await replaceGolfBenefits(conn, Number(req.params.id), golfRows);
