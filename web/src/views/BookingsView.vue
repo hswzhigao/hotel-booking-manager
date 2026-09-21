@@ -31,7 +31,7 @@
             :value="h.id"
           />
         </el-select>
-        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px">
+        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 130px">
           <el-option v-for="(m, k) in STATUS_MAP" :key="k" :label="m.label" :value="k" />
         </el-select>
         <el-date-picker
@@ -83,21 +83,50 @@
             <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="权益" width="60" align="center">
+        <el-table-column label="渠道" width="70" align="center">
+          <template #default="{ row }">{{ channelText(row.channel) }}</template>
+        </el-table-column>
+        <el-table-column label="双早" width="60" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.benefit_used" type="warning" size="small">已用</el-tag>
+            <el-tag v-if="row.breakfast_included" type="success" size="small">双早</el-tag>
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="85">
+        <el-table-column label="权益" width="70" align="center">
           <template #default="{ row }">
-            <el-tag :type="statusMeta(row.status).type" size="small">{{ statusMeta(row.status).label }}</el-tag>
+            <el-tag v-if="row.benefit_used" type="warning" size="small">
+              已用{{ row.benefit_count_used > 1 ? `×${row.benefit_count_used}` : '' }}
+            </el-tag>
+            <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="已结算" width="75" align="center">
+          <template #default="{ row }">
+            <template v-if="row.benefit_holder_id">
+              <el-tag
+                :type="row.holder_settled ? 'success' : 'info'"
+                size="small"
+                class="settle-toggle"
+                @click="toggleSettled(row)"
+              >
+                {{ row.holder_settled ? '已结算' : '未结算' }}
+              </el-tag>
+            </template>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="95">
+          <template #default="{ row }">
+            <el-tag :type="statusMeta(row.status).type" :class="statusMeta(row.status).cls" size="small">
+              {{ statusMeta(row.status).label }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
             <el-button text type="primary" @click="openDetail(row)">详情</el-button>
             <el-button text type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button text type="primary" @click="openCopy(row)">复制</el-button>
             <el-button text type="danger" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -116,10 +145,10 @@
       />
     </el-card>
 
-    <!-- 新建/编辑抽屉 -->
+    <!-- 新建/编辑/复制抽屉 -->
     <el-drawer
       v-model="formVisible"
-      :title="form.id ? '编辑预定' : '新建预定'"
+      :title="drawerTitle"
       size="640px"
       destroy-on-close
     >
@@ -179,7 +208,10 @@
             >
               <div class="holder-option">
                 <span>{{ holderLabel(h) }}</span>
-                <el-tag v-if="h.willing_present" type="success" size="small">✓愿意到场</el-tag>
+                <span class="holder-meta">
+                  <el-tag v-if="h.provides_hotel" type="success" size="small">出酒店</el-tag>
+                  <el-tag v-if="h.willing_present" type="success" size="small">✓愿意到场</el-tag>
+                </span>
               </div>
             </el-option>
           </el-select>
@@ -257,19 +289,46 @@
             预计利润：{{ profitText(formSaleTotal - form.cost_total) }}
           </span>
         </el-form-item>
-        <el-form-item label="酒店权益">
-          <div class="benefit-line">
-            <el-checkbox v-model="form.benefit_used">使用酒店权益</el-checkbox>
-            <el-text v-if="formHolder" type="info" size="small">
-              {{ formHolder.name }} 酒店权益 剩余 {{ formHolder.hotel_benefit_count }} 次
-            </el-text>
-            <el-text v-if="form.benefit_used && !form.benefit_holder_id" type="danger" size="small">
-              使用酒店权益需选择预订人
-            </el-text>
-            <el-text v-if="formHolder && formHolder.hotel_benefit_count <= 0" type="danger" size="small">
+
+        <el-form-item label="升级权益">
+          <div class="benefit-block">
+            <div class="benefit-line">
+              <el-checkbox v-model="form.benefit_used">使用升级权益</el-checkbox>
+              <el-input-number
+                v-if="form.benefit_used"
+                v-model="form.benefit_count_used"
+                :min="1"
+                :max="99"
+                :step="1"
+                :controls="false"
+                style="width: 100px"
+              />
+              <el-text v-if="form.benefit_used" type="info" size="small">张</el-text>
+            </div>
+            <div v-if="form.benefit_used" class="field-tip">
+              <template v-if="formHolder">
+                {{ formHolder.name }} 酒店权益 剩余 {{ formHolder.hotel_benefit_count }} 次
+              </template>
+              <template v-else>使用升级权益需选择预订人</template>
+            </div>
+            <el-text v-if="form.benefit_used && formHolder && formHolder.hotel_benefit_count <= 0" type="danger" size="small">
               剩余不足，勾选后保存将被拒绝
             </el-text>
           </div>
+        </el-form-item>
+
+        <el-form-item label="结算">
+          <el-switch v-model="form.holder_settled" active-text="已给权益人结算" />
+          <div v-if="settleHint" class="field-tip">{{ settleHint }}</div>
+        </el-form-item>
+
+        <el-form-item label="成交渠道">
+          <el-select v-model="form.channel" style="width: 140px">
+            <el-option v-for="(m, k) in CHANNEL_MAP" :key="k" :label="m" :value="k" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="含双早">
+          <el-switch v-model="form.breakfast_included" active-text="含双早" />
         </el-form-item>
         <el-form-item label="下单时间" prop="order_time">
           <el-date-picker
@@ -283,6 +342,7 @@
           <el-select v-model="form.status" style="width: 100%">
             <el-option v-for="(m, k) in STATUS_MAP" :key="k" :label="m.label" :value="k" />
           </el-select>
+          <div class="field-tip">按流程推进：沟通中 → … → 入住完成；任意阶段可转已取消（权益返还）</div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.notes" type="textarea" :rows="2" maxlength="500" />
@@ -290,7 +350,9 @@
       </el-form>
       <template #footer>
         <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="onSave">
+          {{ formMode === 'copy' ? '保存为新预定' : '保存' }}
+        </el-button>
       </template>
     </el-drawer>
 
@@ -321,13 +383,20 @@
         <el-descriptions-item label="利润">
           <span class="money" :class="profitClass(detail.profit)">{{ profitText(detail.profit) }}</span>
         </el-descriptions-item>
+        <el-descriptions-item label="成交渠道">{{ channelText(detail.channel) }}</el-descriptions-item>
+        <el-descriptions-item label="含双早">{{ detail.breakfast_included ? '含双早' : '不含' }}</el-descriptions-item>
         <el-descriptions-item label="酒店权益">
-          {{ detail.benefit_used ? '已使用' : '未使用' }}
+          {{ detail.benefit_used ? `已使用×${detail.benefit_count_used || 1}` : '未使用' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="已结算">
+          <template v-if="detail.benefit_holder_id">{{ detail.holder_settled ? '已给权益人结算' : '未结算' }}</template>
+          <template v-else>-</template>
         </el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-tag :type="statusMeta(detail.status).type" size="small">
+          <el-tag :type="statusMeta(detail.status).type" :class="statusMeta(detail.status).cls" size="small">
             {{ statusMeta(detail.status).label }}
           </el-tag>
+          <span class="flow-step">{{ flowPositionText }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ detail.notes || '-' }}</el-descriptions-item>
       </el-descriptions>
@@ -351,7 +420,8 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 import { bookingsApi, customersApi, hotelsApi, roomTypesApi, benefitHoldersApi } from '../api'
 import {
   money, profitText, profitClass, dateText, datetimeText,
-  toDatetimeString, parseDatetime, statusMeta, STATUS_MAP,
+  toDatetimeString, parseDatetime, statusMeta, STATUS_MAP, statusStep,
+  channelText, CHANNEL_MAP,
 } from '../utils/format'
 
 // ===== 下拉选项 =====
@@ -369,7 +439,12 @@ async function loadOptions() {
     ])
     customerOptions.value = cs.items || []
     hotelOptions.value = hs.items || []
-    holderOptions.value = bh.items || []
+    // provides_hotel/provides_golf 兜底为 1（老数据/异常响应时按「都出」处理）
+    holderOptions.value = (bh.items || []).map((h) => ({
+      ...h,
+      provides_hotel: h.provides_hotel ?? 1,
+      provides_golf: h.provides_golf ?? 1,
+    }))
   } catch (e) {
     // 错误提示已由拦截器统一处理
   }
@@ -451,10 +526,18 @@ function onSizeChange(size) {
   loadList(1)
 }
 
-// ===== 新建/编辑表单 =====
+// ===== 新建/编辑/复制表单 =====
 const formVisible = ref(false)
 const formRef = ref(null)
 const saving = ref(false)
+// create / edit / copy：copy 预填客户/酒店/日期/明细/成本/双早/渠道，清空权益人与结算
+const formMode = ref('create')
+
+const drawerTitle = computed(() => {
+  if (formMode.value === 'edit') return '编辑预定'
+  if (formMode.value === 'copy') return '复制预定（可换预订人拆单）'
+  return '新建预定'
+})
 
 function todayStr(offset = 0) {
   const d = new Date()
@@ -472,8 +555,12 @@ const emptyForm = () => ({
   items: [{ room_type_id: null, price: null }],
   cost_total: null,
   benefit_used: false,
+  benefit_count_used: 1,
+  holder_settled: false,
+  breakfast_included: false,
+  channel: 'xianyu',
   order_time: new Date(),
-  status: 'active',
+  status: 'communicating',
   notes: '',
 })
 
@@ -496,6 +583,14 @@ const formHolder = computed(() =>
   holderOptions.value.find((h) => h.id === form.benefit_holder_id) || null,
 )
 
+// 结算时机提示（V3.2 §2）：按所选预订人 source_channel 联动，灰字不强制
+const settleHint = computed(() => {
+  if (!formHolder.value) return ''
+  if (formHolder.value.source_channel === 'xianyu') return '闲鱼渠道：客户入住完成后去闲鱼确认收货'
+  if (formHolder.value.source_channel === 'wechat') return '微信好友：酒店订单确认后微信转账'
+  return ''
+})
+
 const formNights = computed(() => {
   const [a, b] = form.dateRange || []
   if (!a || !b) return 0
@@ -509,8 +604,31 @@ const formSaleTotal = computed(() =>
 
 function openCreate() {
   Object.assign(form, emptyForm())
+  formMode.value = 'create'
   roomTypeOptions.value = []
   formVisible.value = true
+}
+
+// 详情 → 全量 PUT 载荷（后端 PUT 需提交所有字段）
+function payloadFromDetail(d, override = {}) {
+  return {
+    customer_id: d.customer_id,
+    hotel_id: d.hotel_id,
+    benefit_holder_id: d.benefit_holder_id ?? null,
+    check_in: dateText(d.check_in),
+    check_out: dateText(d.check_out),
+    cost_total: Number(d.cost_total || 0),
+    benefit_used: d.benefit_used ? 1 : 0,
+    benefit_count_used: Number(d.benefit_count_used || 1),
+    order_time: d.order_time ? toDatetimeString(d.order_time) : '',
+    status: d.status,
+    channel: d.channel || 'xianyu',
+    breakfast_included: d.breakfast_included ? 1 : 0,
+    holder_settled: d.holder_settled ? 1 : 0,
+    notes: d.notes || '',
+    items: (d.items || []).map((it) => ({ room_type_id: it.room_type_id, price: Number(it.price) })),
+    ...override,
+  }
 }
 
 async function openEdit(row) {
@@ -525,10 +643,37 @@ async function openEdit(row) {
       items: (d.items || []).map((it) => ({ room_type_id: it.room_type_id, price: Number(it.price) })),
       cost_total: Number(d.cost_total),
       benefit_used: !!d.benefit_used,
+      benefit_count_used: Number(d.benefit_count_used || 1),
+      holder_settled: !!d.holder_settled,
+      breakfast_included: !!d.breakfast_included,
+      channel: d.channel || 'xianyu',
       order_time: parseDatetime(d.order_time),
       status: d.status,
       notes: d.notes || '',
     })
+    formMode.value = 'edit'
+    await loadRoomTypes(d.hotel_id)
+    formVisible.value = true
+  } catch (e) {
+    // 错误提示已由拦截器统一处理
+  }
+}
+
+// 复制预定：预填客户/酒店/日期/明细/成本/双早/渠道/备注，清空权益人/权益勾选/结算状态
+async function openCopy(row) {
+  try {
+    const d = await bookingsApi.detail(row.id)
+    Object.assign(form, emptyForm(), {
+      customer_id: d.customer_id,
+      hotel_id: d.hotel_id,
+      dateRange: [dateText(d.check_in), dateText(d.check_out)],
+      items: (d.items || []).map((it) => ({ room_type_id: it.room_type_id, price: Number(it.price) })),
+      cost_total: Number(d.cost_total || 0),
+      breakfast_included: !!d.breakfast_included,
+      channel: d.channel || 'xianyu',
+      notes: d.notes || '',
+    })
+    formMode.value = 'copy'
     await loadRoomTypes(d.hotel_id)
     formVisible.value = true
   } catch (e) {
@@ -572,6 +717,15 @@ async function onSave() {
     ElMessage.warning('请为每间房填写不小于 0 的价格')
     return
   }
+  if (form.benefit_used && !form.benefit_holder_id) {
+    ElMessage.warning('使用升级权益需选择预订人')
+    return
+  }
+  const count = Number(form.benefit_count_used)
+  if (form.benefit_used && (!Number.isInteger(count) || count < 1 || count > 99)) {
+    ElMessage.warning('权益张数应为 1-99 的整数')
+    return
+  }
   const payload = {
     customer_id: form.customer_id,
     hotel_id: form.hotel_id,
@@ -579,7 +733,11 @@ async function onSave() {
     check_in: form.dateRange[0],
     check_out: form.dateRange[1],
     cost_total: Number(form.cost_total || 0),
-    benefit_used: form.benefit_used,
+    benefit_used: form.benefit_used ? 1 : 0,
+    benefit_count_used: form.benefit_used ? count : 1,
+    holder_settled: form.holder_settled ? 1 : 0,
+    breakfast_included: form.breakfast_included ? 1 : 0,
+    channel: form.channel,
     order_time: toDatetimeString(form.order_time),
     status: form.status,
     notes: form.notes || '',
@@ -587,20 +745,38 @@ async function onSave() {
   }
   saving.value = true
   try {
-    if (form.id) {
+    if (formMode.value === 'edit' && form.id) {
       await bookingsApi.update(form.id, payload)
       ElMessage.success('预定已更新')
     } else {
       await bookingsApi.create(payload)
-      ElMessage.success('预定已创建')
+      ElMessage.success(formMode.value === 'copy' ? '已按复制内容新建预定' : '预定已创建')
     }
     formVisible.value = false
     await loadList()
     loadOptions()
   } catch (e) {
-    // 错误提示已由拦截器统一处理
+    // 400（如「该预订人剩余酒店权益不足」）等错误提示已由拦截器统一处理
   } finally {
     saving.value = false
+  }
+}
+
+// 列表「已结算」就地切换：拉详情 → 全量 PUT 翻转 holder_settled
+const settleToggling = ref(false)
+async function toggleSettled(row) {
+  if (settleToggling.value) return
+  settleToggling.value = true
+  try {
+    const d = await bookingsApi.detail(row.id)
+    const next = row.holder_settled ? 0 : 1
+    await bookingsApi.update(row.id, payloadFromDetail(d, { holder_settled: next }))
+    row.holder_settled = next
+    ElMessage.success(next ? '已标记为已结算' : '已取消结算标记')
+  } catch (e) {
+    // 错误提示已由拦截器统一处理
+  } finally {
+    settleToggling.value = false
   }
 }
 
@@ -627,6 +803,11 @@ async function onDelete(row) {
 // ===== 详情 =====
 const detailVisible = ref(false)
 const detail = ref({})
+
+const flowPositionText = computed(() => {
+  const step = statusStep(detail.value.status)
+  return step ? `（流程第 ${step}/9 步）` : ''
+})
 
 async function openDetail(row) {
   try {
@@ -668,6 +849,12 @@ onMounted(() => {
   gap: 8px;
 }
 
+.holder-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .nights-tip {
   margin-left: 10px;
   font-size: 12px;
@@ -695,11 +882,25 @@ onMounted(() => {
   color: #606266;
 }
 
+.benefit-block {
+  width: 100%;
+}
+
 .benefit-line {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
+}
+
+.settle-toggle {
+  cursor: pointer;
+}
+
+.flow-step {
+  margin-left: 6px;
+  font-size: 12px;
+  color: #909399;
 }
 
 .detail-items-title {

@@ -5,6 +5,7 @@
         <el-card class="stat-card" shadow="hover">
           <div class="stat-label">{{ card.label }}</div>
           <div class="stat-value" :class="card.cls || ''">{{ card.value }}</div>
+          <div v-if="card.sub" class="stat-sub">{{ card.sub }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -18,6 +19,34 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- V3.3 渠道分区卡：酒店+高尔夫合并按成交渠道统计 -->
+    <div class="section-title">渠道收益</div>
+    <el-row v-if="channelCards.length" :gutter="16">
+      <el-col v-for="ch in channelCards" :key="ch.channel" :xs="24" :sm="12" :md="8">
+        <el-card class="stat-card channel-card" shadow="hover">
+          <div class="channel-head">
+            <span class="channel-name">{{ ch.name }}</span>
+            <el-tag size="small" type="info">{{ ch.orderCount }} 单</el-tag>
+          </div>
+          <div class="channel-line">
+            <span class="channel-label">收入</span>
+            <span class="money">{{ money(ch.sale) }}</span>
+          </div>
+          <div class="channel-line">
+            <span class="channel-label">利润</span>
+            <span class="money money-profit" :class="ch.profit >= 0 ? 'positive' : 'negative'">
+              {{ profitText(ch.profit) }}
+            </span>
+          </div>
+          <div class="channel-line">
+            <span class="channel-label">月收入</span>
+            <span class="money">{{ money(ch.monthSale) }}</span>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+    <el-empty v-else description="暂无渠道成交数据" :image-size="60" />
 
     <el-card shadow="never" class="recent-card">
       <template #header>最近预定</template>
@@ -59,7 +88,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { statsApi } from '../api'
-import { money, profitText, profitClass, datetimeText, statusMeta } from '../utils/format'
+import { money, profitText, profitClass, datetimeText, statusMeta, channelText } from '../utils/format'
 
 const router = useRouter()
 const loading = ref(false)
@@ -79,11 +108,22 @@ const summary = ref({
   golf_total_sale: 0,
   golf_total_cost: 0,
   golf_total_profit: 0,
+  // V3.3 今日收益 + 渠道分解
+  today_sale: 0,
+  today_cost: 0,
+  today_profit: 0,
+  channels: [],
 })
 
 const recentBookings = computed(() => summary.value.recent_bookings || [])
 
 const cards = computed(() => [
+  {
+    label: '今日收益',
+    value: profitText(summary.value.today_profit),
+    sub: `今日卖价 ${money(summary.value.today_sale)}`,
+    cls: Number(summary.value.today_profit) >= 0 ? 'positive' : 'negative',
+  },
   { label: '预定数', value: summary.value.booking_count },
   { label: '总收入', value: money(summary.value.total_sale) },
   { label: '总成本', value: money(summary.value.total_cost) },
@@ -101,6 +141,18 @@ const cards = computed(() => [
     cls: Number(summary.value.month_profit) >= 0 ? 'positive' : 'negative',
   },
 ])
+
+// 渠道分区卡：channels[{channel,order_count,sale,cost,profit,month_sale,month_profit}]
+const channelCards = computed(() =>
+  (summary.value.channels || []).map((c) => ({
+    channel: c.channel,
+    name: channelText(c.channel),
+    orderCount: c.order_count,
+    sale: Number(c.sale || 0),
+    profit: Number(c.profit || 0),
+    monthSale: Number(c.month_sale || 0),
+  })),
+)
 
 const golfCards = computed(() => [
   { label: '高尔夫订单数', value: summary.value.golf_order_count },
@@ -154,6 +206,41 @@ function goBookings() {
 
 .stat-value.negative {
   color: #f56c6c;
+}
+
+.stat-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.channel-card {
+  text-align: left;
+}
+
+.channel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.channel-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.channel-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #606266;
+  padding: 3px 0;
+}
+
+.channel-label {
+  color: #909399;
 }
 
 .section-title {

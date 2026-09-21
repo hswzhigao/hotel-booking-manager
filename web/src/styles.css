@@ -40,3 +40,10 @@ body,
 .money-profit.negative {
   color: #f56c6c;
 }
+
+/* V3.2 状态徽标：finished 深绿（区别于 checked_in 的普通绿） */
+.el-tag.is-deep-green {
+  --el-tag-bg-color: #d9f0d0;
+  --el-tag-border-color: #3e9e2b;
+  --el-tag-text-color: #1f6b10;
+}

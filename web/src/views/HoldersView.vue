@@ -21,6 +21,14 @@
           <el-option label="合作中" :value="1" />
           <el-option label="已停用" :value="0" />
         </el-select>
+        <el-select v-model="filters.provides_hotel" placeholder="出酒店" clearable style="width: 100px">
+          <el-option label="出酒店权益" :value="1" />
+          <el-option label="不出酒店" :value="0" />
+        </el-select>
+        <el-select v-model="filters.provides_golf" placeholder="出高尔夫" clearable style="width: 105px">
+          <el-option label="出高尔夫权益" :value="1" />
+          <el-option label="不出高尔夫" :value="0" />
+        </el-select>
         <el-select v-model="filters.availability" placeholder="可用时间" clearable style="width: 120px">
           <el-option v-for="(m, k) in AVAILABILITY_MAP" :key="k" :label="m.label" :value="k" />
         </el-select>
@@ -38,6 +46,18 @@
         :row-class-name="rowClassName"
       >
         <el-table-column prop="name" label="姓名" min-width="90" fixed="left" />
+        <el-table-column label="来源/出权益" width="150">
+          <template #default="{ row }">
+            <div class="badge-cell">
+              <el-tag :type="sourceChannelType(row.source_channel)" size="small">
+                {{ channelText(row.source_channel) }}
+              </el-tag>
+              <el-tag v-if="row.provides_hotel" type="success" size="small">出酒店</el-tag>
+              <el-tag v-if="row.provides_golf" type="primary" size="small">出高尔夫</el-tag>
+              <span v-if="!row.provides_hotel && !row.provides_golf" class="badge-none">都不出</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="card_type" label="卡片类型" min-width="100">
           <template #default="{ row }">{{ row.card_type || '-' }}</template>
         </el-table-column>
@@ -140,6 +160,19 @@
         </el-form-item>
         <el-form-item label="电话">
           <el-input v-model="form.phone" maxlength="30" placeholder="手机号" />
+        </el-form-item>
+        <el-form-item label="来源渠道">
+          <el-select v-model="form.source_channel" style="width: 140px">
+            <el-option v-for="(m, k) in CHANNEL_MAP" :key="k" :label="m" :value="k" />
+          </el-select>
+          <div class="field-tip">权益人来自哪个渠道（结算提示按此联动）</div>
+        </el-form-item>
+        <el-form-item label="出酒店权益">
+          <el-switch v-model="form.provides_hotel" active-text="出酒店权益" />
+        </el-form-item>
+        <el-form-item label="出高尔夫">
+          <el-switch v-model="form.provides_golf" active-text="出高尔夫权益" />
+          <div class="field-tip">只出单边权益的预订人关掉另一边，酒店/高尔夫下单匹配时可识别</div>
         </el-form-item>
         <el-form-item label="酒店权益" prop="hotel_benefit_count">
           <el-input-number v-model="form.hotel_benefit_count" :min="0" :step="1" />
@@ -281,7 +314,14 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, Collection } from '@element-plus/icons-vue'
 import { benefitHoldersApi, golfBenefitTypesApi } from '../api'
-import { monthText, availabilityMeta, AVAILABILITY_MAP } from '../utils/format'
+import { monthText, availabilityMeta, AVAILABILITY_MAP, channelText, CHANNEL_MAP } from '../utils/format'
+
+// 来源渠道徽标配色：闲鱼橙、微信绿、其他灰
+function sourceChannelType(channel) {
+  if (channel === 'xianyu') return 'warning'
+  if (channel === 'wechat') return 'success'
+  return 'info'
+}
 
 // 更新月=当前月 → 行高亮（黄色底 +「本月更新」徽标）
 const currentMonth = new Date().getMonth() + 1
@@ -313,6 +353,8 @@ const filters = reactive({
   willing_assist: null,
   active: null,
   availability: null,
+  provides_hotel: null,
+  provides_golf: null,
 })
 
 async function loadList(p = page.value) {
@@ -326,6 +368,8 @@ async function loadList(p = page.value) {
       willing_assist: filters.willing_assist ?? undefined,
       active: filters.active ?? undefined,
       availability: filters.availability || undefined,
+      provides_hotel: filters.provides_hotel ?? undefined,
+      provides_golf: filters.provides_golf ?? undefined,
     })
     rows.value = data.items || []
     total.value = data.total || 0
@@ -343,6 +387,8 @@ function resetFilters() {
   filters.willing_assist = null
   filters.active = null
   filters.availability = null
+  filters.provides_hotel = null
+  filters.provides_golf = null
   loadList(1)
 }
 
@@ -366,6 +412,9 @@ const emptyForm = () => ({
   card_type: '',
   wechat: '',
   phone: '',
+  source_channel: 'other',
+  provides_hotel: true,
+  provides_golf: true,
   hotel_benefit_count: 0,
   hotel_refresh_month: null,
   golf_benefits: [],
@@ -405,6 +454,9 @@ function openEdit(row) {
     card_type: row.card_type || '',
     wechat: row.wechat || '',
     phone: row.phone || '',
+    source_channel: row.source_channel || 'other',
+    provides_hotel: row.provides_hotel === undefined ? true : !!row.provides_hotel,
+    provides_golf: row.provides_golf === undefined ? true : !!row.provides_golf,
     hotel_benefit_count: Number(row.hotel_benefit_count || 0),
     hotel_refresh_month: row.hotel_refresh_month || null,
     golf_benefits: (row.golf_benefits || []).map((b) => ({
@@ -442,6 +494,9 @@ async function onSave() {
     card_type: form.card_type || '',
     wechat: form.wechat || '',
     phone: form.phone || '',
+    source_channel: form.source_channel || 'other',
+    provides_hotel: form.provides_hotel ? 1 : 0,
+    provides_golf: form.provides_golf ? 1 : 0,
     hotel_benefit_count: form.hotel_benefit_count,
     hotel_refresh_month: form.hotel_refresh_month ?? '',
     availability: form.availability,
@@ -635,6 +690,17 @@ onMounted(() => loadList(1))
   color: #909399;
   margin-top: 2px;
   line-height: 1.4;
+}
+
+.badge-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.badge-none {
+  font-size: 12px;
+  color: #f56c6c;
 }
 
 .benefit-rows {

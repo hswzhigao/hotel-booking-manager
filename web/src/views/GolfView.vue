@@ -147,6 +147,7 @@
               <div class="holder-option">
                 <span>{{ h.name }}</span>
                 <span class="holder-meta">
+                  <el-tag v-if="h.provides_golf" type="primary" size="small">出高尔夫</el-tag>
                   <el-tag :type="availabilityMeta(h.availability).type" size="small">
                     {{ availabilityMeta(h.availability).label }}
                   </el-tag>
@@ -278,7 +279,7 @@ async function loadOptions() {
       golfOrdersApi.courses(),
     ])
     customerOptions.value = cs.items || []
-    holderOptions.value = hs.items || []
+    holderOptions.value = (hs.items || []).map((h) => ({ ...h, provides_golf: h.provides_golf ?? 1 }))
     historyCourses.value = Array.isArray(courses) ? courses : []
   } catch (e) {
     // 错误提示已由拦截器统一处理

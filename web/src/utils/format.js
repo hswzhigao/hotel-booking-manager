@@ -62,14 +62,35 @@ export function parseDatetime(str) {
   return Number.isNaN(d.getTime()) ? new Date() : d
 }
 
+// V3.2 酒店订单 10 态状态机（按流程顺序）
+// 配色：前 3 态橙系、中间 4 态蓝系、checked_in 绿、finished 深绿、cancelled 灰
 export const STATUS_MAP = {
-  active: { label: '进行中', type: 'primary' },
-  completed: { label: '已完成', type: 'success' },
+  communicating: { label: '沟通中', type: 'warning' },
+  ordered: { label: '已下单', type: 'warning' },
+  info_confirmed: { label: '已确认信息', type: 'warning' },
+  booking: { label: '预订中', type: 'primary' },
+  booked: { label: '已预订', type: 'primary' },
+  hotel_confirmed: { label: '酒店已确认', type: 'primary' },
+  awaiting_checkin: { label: '待入住', type: 'primary' },
+  checked_in: { label: '已入住', type: 'success' },
+  finished: { label: '入住完成', type: 'success', cls: 'is-deep-green' },
   cancelled: { label: '已取消', type: 'info' },
 }
 
+// 流程顺序（cancelled 除外），详情可显示「第 n/9 步」
+export const STATUS_ORDER = [
+  'communicating', 'ordered', 'info_confirmed', 'booking', 'booked',
+  'hotel_confirmed', 'awaiting_checkin', 'checked_in', 'finished',
+]
+
 export function statusMeta(status) {
   return STATUS_MAP[status] || { label: status, type: 'info' }
+}
+
+/** 流程位置：返回 1-9；cancelled/未知返回 0 */
+export function statusStep(status) {
+  const i = STATUS_ORDER.indexOf(status)
+  return i < 0 ? 0 : i + 1
 }
 
 // ===== V3 高尔夫 =====
@@ -84,9 +105,11 @@ export function golfStatusMeta(status) {
   return GOLF_STATUS_MAP[status] || { label: status, type: 'info' }
 }
 
+// V3.3 成交/来源渠道（成交渠道默认 xianyu，来源渠道默认 other）
 export const CHANNEL_MAP = {
   xianyu: '闲鱼',
   wechat: '微信',
+  other: '其他',
 }
 
 export function channelText(channel) {
