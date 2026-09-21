@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 router.use(auth);
 
 const STATUSES = ['communicating', 'ordered', 'info_confirmed', 'booking', 'booked', 'hotel_confirmed', 'awaiting_checkin', 'checked_in', 'finished', 'cancelled'];
+const CHANNELS = ['xianyu', 'wechat', 'other'];
 
 function bad(status, msg) { const e = new Error(msg); e.status = status; throw e; }
 
@@ -24,12 +25,13 @@ function parseOrderTime(s) {
 // 校验并规整预定入参
 async function validatePayload(body) {
   const { customer_id, hotel_id, check_in, check_out, cost_total = 0, order_time, benefit_used = 0, status = 'communicating', notes, items, benefit_holder_id,
-          breakfast_included = 0, holder_settled = 0, benefit_count_used = 1 } = body || {};
+          breakfast_included = 0, channel = 'xianyu', holder_settled = 0, benefit_count_used = 1 } = body || {};
   if (!customer_id || !hotel_id) bad(400, '请选择客户和酒店');
   const ci = parseDate(check_in), co = parseDate(check_out);
   if (!ci || !co) bad(400, '入住/离店日期格式应为 YYYY-MM-DD');
   if (new Date(`${co}T00:00:00`) <= new Date(`${ci}T00:00:00`)) bad(400, '离店日期必须晚于入住日期');
   if (!STATUSES.includes(status)) bad(400, '状态不合法');
+  if (!CHANNELS.includes(channel)) bad(400, '成交渠道不合法');
   const bu = Number(benefit_used) === 1 ? 1 : 0;
   const bcu = Number(benefit_count_used) || 1;
   if (!Number.isInteger(bcu) || bcu < 1 || bcu > 99) bad(400, '权益张数应为 1-99');
@@ -68,6 +70,7 @@ async function validatePayload(body) {
     orderTime: ot, benefitUsed: bu, benefitCountUsed: bcu, status, notes: notes || null,
     benefit_holder_id: holderId,
     breakfastIncluded: Number(breakfast_included) === 1 ? 1 : 0,
+    channel,
     holderSettled: Number(holder_settled) === 1 ? 1 : 0,
     items: items.map(i => ({ room_type_id: Number(i.room_type_id), price: Number(i.price) })),
   };
@@ -174,8 +177,8 @@ router.post('/', async (req, res, next) => {
   try {
     const p = await validatePayload(req.body);
     await conn.beginTransaction();
-    const cols = ['customer_id', 'hotel_id', 'check_in', 'check_out', 'nights', 'sale_total', 'cost_total', 'benefit_used', 'benefit_count_used', 'status', 'breakfast_included', 'holder_settled', 'notes', 'benefit_holder_id'];
-    const vals = [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.benefitUsed, p.benefitCountUsed, p.status, p.breakfastIncluded, p.holderSettled, p.notes, p.benefit_holder_id];
+    const cols = ['customer_id', 'hotel_id', 'check_in', 'check_out', 'nights', 'sale_total', 'cost_total', 'benefit_used', 'benefit_count_used', 'status', 'breakfast_included', 'channel', 'holder_settled', 'notes', 'benefit_holder_id'];
+    const vals = [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.benefitUsed, p.benefitCountUsed, p.status, p.breakfastIncluded, p.channel, p.holderSettled, p.notes, p.benefit_holder_id];
     if (p.orderTime) { cols.push('order_time'); vals.push(p.orderTime); } // 不传则取数据库当前时间
     const [ins] = await conn.query(
       `INSERT INTO bookings (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, vals
@@ -211,13 +214,13 @@ router.put('/:id', async (req, res, next) => {
     await conn.beginTransaction();
     if (p.orderTime) {
       await conn.query(
-        `UPDATE bookings SET customer_id=?, hotel_id=?, check_in=?, check_out=?, nights=?, sale_total=?, cost_total=?, order_time=?, benefit_used=?, benefit_count_used=?, status=?, breakfast_included=?, holder_settled=?, notes=?, benefit_holder_id=? WHERE id=?`,
-        [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.orderTime, p.benefitUsed, p.benefitCountUsed, p.status, p.breakfastIncluded, p.holderSettled, p.notes, p.benefit_holder_id, id]
+        `UPDATE bookings SET customer_id=?, hotel_id=?, check_in=?, check_out=?, nights=?, sale_total=?, cost_total=?, order_time=?, benefit_used=?, benefit_count_used=?, status=?, breakfast_included=?, channel=?, holder_settled=?, notes=?, benefit_holder_id=? WHERE id=?`,
+        [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.orderTime, p.benefitUsed, p.benefitCountUsed, p.status, p.breakfastIncluded, p.channel, p.holderSettled, p.notes, p.benefit_holder_id, id]
       );
     } else {
       await conn.query(
-        `UPDATE bookings SET customer_id=?, hotel_id=?, check_in=?, check_out=?, nights=?, sale_total=?, cost_total=?, benefit_used=?, benefit_count_used=?, status=?, breakfast_included=?, holder_settled=?, notes=?, benefit_holder_id=? WHERE id=?`,
-        [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.benefitUsed, p.benefitCountUsed, p.status, p.breakfastIncluded, p.holderSettled, p.notes, p.benefit_holder_id, id]
+        `UPDATE bookings SET customer_id=?, hotel_id=?, check_in=?, check_out=?, nights=?, sale_total=?, cost_total=?, benefit_used=?, benefit_count_used=?, status=?, breakfast_included=?, channel=?, holder_settled=?, notes=?, benefit_holder_id=? WHERE id=?`,
+        [p.customer_id, p.hotel_id, p.check_in, p.check_out, p.nights, p.saleTotal, p.costTotal, p.benefitUsed, p.benefitCountUsed, p.status, p.breakfastIncluded, p.channel, p.holderSettled, p.notes, p.benefit_holder_id, id]
       );
     }
     await conn.query('DELETE FROM booking_items WHERE booking_id = ?', [id]);

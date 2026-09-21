@@ -5,7 +5,7 @@ const auth = require('../middleware/auth');
 router.use(auth);
 
 const STATUSES = ['pending', 'booked', 'completed', 'cancelled'];
-const CHANNELS = ['xianyu', 'wechat'];
+const CHANNELS = ['xianyu', 'wechat', 'other'];
 
 function bad(status, msg) { const e = new Error(msg); e.status = status; throw e; }
 

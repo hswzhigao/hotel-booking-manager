@@ -38,6 +38,41 @@ router.get('/summary', async (req, res, next) => {
     r.golf_total_profit = Math.round((g.golf_total_sale - g.golf_total_cost) * 100) / 100;
     r.golf_month_sale = g.golf_month_sale;
     r.golf_month_profit = Math.round((g.golf_month_sale - g.golf_month_cost) * 100) / 100;
+    // 今日收益（双线合计）
+    const pad = n => String(n).padStart(2, '0');
+    const todayStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 00:00:00`;
+    const [[t]] = await pool.query(
+      `SELECT COALESCE(SUM(sale),0) sale, COALESCE(SUM(cost),0) cost FROM (
+         SELECT sale_total sale, cost_total cost FROM bookings WHERE status NOT IN ('cancelled','communicating') AND order_time >= ?
+         UNION ALL
+         SELECT sale_price, cost_price FROM golf_orders WHERE status <> 'cancelled' AND order_time >= ?
+       ) u`, [todayStart, todayStart]);
+    r.today_sale = t.sale;
+    r.today_cost = t.cost;
+    r.today_profit = Math.round((t.sale - t.cost) * 100) / 100;
+
+    // 渠道分解（双线合计 + 自然月口径）
+    const [chRows] = await pool.query(
+      `SELECT channel,
+         COUNT(*) order_count,
+         COALESCE(SUM(sale),0) sale,
+         COALESCE(SUM(cost),0) cost,
+         COALESCE(SUM(CASE WHEN ot >= ? THEN sale ELSE 0 END),0) month_sale,
+         COALESCE(SUM(CASE WHEN ot >= ? THEN cost ELSE 0 END),0) month_cost
+       FROM (
+         SELECT channel, sale_total sale, cost_total cost, order_time ot
+         FROM bookings WHERE status NOT IN ('cancelled','communicating')
+         UNION ALL
+         SELECT channel, sale_price, cost_price, order_time
+         FROM golf_orders WHERE status <> 'cancelled'
+       ) u GROUP BY channel`, [monthStart, monthStart]);
+    r.channels = chRows.map(c => ({
+      channel: c.channel, order_count: c.order_count,
+      sale: c.sale, cost: c.cost,
+      profit: Math.round((c.sale - c.cost) * 100) / 100,
+      month_sale: c.month_sale,
+      month_profit: Math.round((c.month_sale - c.month_cost) * 100) / 100,
+    }));
     r.total_profit = Math.round((r.total_sale - r.total_cost) * 100) / 100;
     r.month_profit = Math.round((r.month_sale - r.month_cost) * 100) / 100;
     const [recent] = await pool.query(

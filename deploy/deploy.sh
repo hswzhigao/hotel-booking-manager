@@ -16,7 +16,7 @@ rsync -az --delete web/dist/ "$SERVER:$WEB_DIR/"
 rsync -az --delete --exclude node_modules --exclude .env server/ "$SERVER:$APP_DIR/server/"
 
 echo "==> 3/4 服务器端安装依赖并初始化/迁移数据库（幂等）..."
-ssh "$SERVER" "cd $APP_DIR/server && npm install --omit=dev && npm run init-db && npm run migrate-v2 && npm run migrate-v3 && npm run migrate-v4 && npm run migrate-v5"
+ssh "$SERVER" "cd $APP_DIR/server && npm install --omit=dev && npm run init-db && npm run migrate-v2 && npm run migrate-v3 && npm run migrate-v4 && npm run migrate-v5 && npm run migrate-v6"
 
 echo "==> 4/4 重启服务..."
 ssh "$SERVER" "sudo systemctl restart hotel-api && sleep 1 && systemctl is-active hotel-api"
