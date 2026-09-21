@@ -56,6 +56,8 @@ router.delete('/:id', async (req, res, next) => {
   try {
     const [ref] = await pool.query('SELECT COUNT(*) c FROM holder_golf_benefits WHERE benefit_type_id = ?', [req.params.id]);
     if (ref[0].c > 0) return res.status(409).json({ error: '该权益种类已被预订人持有，无法删除' });
+    const [ord] = await pool.query('SELECT COUNT(*) c FROM golf_orders WHERE benefit_type_id = ?', [req.params.id]);
+    if (ord[0].c > 0) return res.status(409).json({ error: '该权益种类已被高尔夫订单引用，无法删除' });
     const [r] = await pool.query('DELETE FROM golf_benefit_types WHERE id = ?', [req.params.id]);
     if (r.affectedRows === 0) return res.status(404).json({ error: '权益种类不存在' });
     res.json({ ok: true });

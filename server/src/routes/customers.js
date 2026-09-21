@@ -65,8 +65,9 @@ router.get('/:id', async (req, res, next) => {
     bookings.forEach(b => { b.items = itemsMap[b.id] || []; });
     const [golfOrders] = await pool.query(
       `SELECT g.*, bh.name benefit_holder_name, bh.availability holder_availability,
-        (g.sale_price - g.cost_price) profit
+        t.name benefit_type_name, (g.sale_price - g.cost_price) profit
       FROM golf_orders g LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
+      LEFT JOIN golf_benefit_types t ON t.id = g.benefit_type_id
       WHERE g.customer_id = ? ORDER BY g.order_time DESC, g.id DESC`, [req.params.id]
     );
     res.json({ customer: cs[0], bookings, golf_orders: golfOrders });

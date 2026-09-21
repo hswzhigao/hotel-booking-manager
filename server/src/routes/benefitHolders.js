@@ -71,7 +71,10 @@ async function normalizeGolfBenefits(arr) {
       const e = new Error('同一权益种类只能有一行明细'); e.status = 400; throw e;
     }
     seen.add(tid);
-    const cl = Number(r.count_left) || 0;
+    if (r.count_left === null || r.count_left === undefined || r.count_left === '' || isNaN(Number(r.count_left))) {
+      const e = new Error('权益次数不合法'); e.status = 400; throw e;
+    }
+    const cl = Number(r.count_left);
     if (!Number.isInteger(cl) || cl < 0) {
       const e = new Error('权益次数不合法'); e.status = 400; throw e;
     }
