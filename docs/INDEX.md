@@ -7,3 +7,4 @@
 | 任务文件 | [plan/tasks/](plan/tasks/) | backend-api / frontend-web / deploy-infra / domain-https |
 | 剩余问题 | [plan/backlog.md](plan/backlog.md) | 不阻塞本次交付的问题 |
 | V2 设计 | [architecture/v2-checkin-policy.md](architecture/v2-checkin-policy.md) | 入住政策/权益人/入住指南 |
+| 图表集 | [architecture/diagrams.md](architecture/diagrams.md) | 架构图/ER图/业务流程图/权益账本规则 |
