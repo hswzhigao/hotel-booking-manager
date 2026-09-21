@@ -71,3 +71,46 @@ export const STATUS_MAP = {
 export function statusMeta(status) {
   return STATUS_MAP[status] || { label: status, type: 'info' }
 }
+
+// ===== V3 高尔夫 =====
+export const GOLF_STATUS_MAP = {
+  pending: { label: '待定位', type: 'warning' },
+  booked: { label: '已定位', type: 'primary' },
+  completed: { label: '已完成', type: 'success' },
+  cancelled: { label: '已取消', type: 'info' },
+}
+
+export function golfStatusMeta(status) {
+  return GOLF_STATUS_MAP[status] || { label: status, type: 'info' }
+}
+
+export const CHANNEL_MAP = {
+  xianyu: '闲鱼',
+  wechat: '微信',
+}
+
+export function channelText(channel) {
+  return CHANNEL_MAP[channel] || channel || '-'
+}
+
+export const AVAILABILITY_MAP = {
+  any: { label: '不限', type: 'info' },
+  weekend_only: { label: '仅周末', type: 'warning' },
+  weekday_only: { label: '仅工作日', type: 'success' },
+}
+
+export function availabilityMeta(availability) {
+  return AVAILABILITY_MAP[availability] || AVAILABILITY_MAP.any
+}
+
+/** 更新月显示：3 →「3月」，空 →「未知」 */
+export function monthText(month) {
+  return month ? `${month}月` : '未知'
+}
+
+/** 日期字符串是否周末（周六/周日） */
+export function isWeekend(dateStr) {
+  if (!dateStr) return false
+  const d = new Date(String(dateStr).slice(0, 10))
+  return !Number.isNaN(d.getTime()) && (d.getDay() === 0 || d.getDay() === 6)
+}

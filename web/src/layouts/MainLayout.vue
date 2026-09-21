@@ -20,13 +20,17 @@
           <el-icon><Tickets /></el-icon>
           <template #title>预定管理</template>
         </el-menu-item>
+        <el-menu-item index="/golf">
+          <el-icon><Flag /></el-icon>
+          <template #title>高尔夫管理</template>
+        </el-menu-item>
         <el-menu-item index="/customers">
           <el-icon><User /></el-icon>
           <template #title>客户管理</template>
         </el-menu-item>
         <el-menu-item index="/holders">
           <el-icon><Avatar /></el-icon>
-          <template #title>权益人管理</template>
+          <template #title>预订人管理</template>
         </el-menu-item>
         <el-menu-item index="/hotels">
           <el-icon><OfficeBuilding /></el-icon>
@@ -65,7 +69,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Odometer, Tickets, User, Avatar, OfficeBuilding, Setting, Expand, Fold, UserFilled,
+  Odometer, Tickets, User, Avatar, OfficeBuilding, Setting, Expand, Fold, UserFilled, Flag,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 

@@ -14,8 +14,9 @@ const routes = [
     children: [
       { path: '', name: 'dashboard', component: () => import('../views/DashboardView.vue'), meta: { title: '仪表盘' } },
       { path: 'bookings', name: 'bookings', component: () => import('../views/BookingsView.vue'), meta: { title: '预定管理' } },
+      { path: 'golf', name: 'golf', component: () => import('../views/GolfView.vue'), meta: { title: '高尔夫管理' } },
       { path: 'customers', name: 'customers', component: () => import('../views/CustomersView.vue'), meta: { title: '客户管理' } },
-      { path: 'holders', name: 'holders', component: () => import('../views/HoldersView.vue'), meta: { title: '权益人管理' } },
+      { path: 'holders', name: 'holders', component: () => import('../views/HoldersView.vue'), meta: { title: '预订人管理' } },
       { path: 'hotels', name: 'hotels', component: () => import('../views/HotelsView.vue'), meta: { title: '酒店管理' } },
       { path: 'settings', name: 'settings', component: () => import('../views/SettingsView.vue'), meta: { title: '系统设置' } },
     ],

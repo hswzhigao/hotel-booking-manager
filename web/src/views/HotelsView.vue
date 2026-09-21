@@ -140,7 +140,7 @@
             type="textarea"
             :rows="2"
             maxlength="1000"
-            placeholder="电话咨询结果整理，如：提前1天致电前台报权益人姓名"
+            placeholder="电话咨询结果整理，如：提前1天致电前台报预订人姓名"
           />
         </el-form-item>
         <el-form-item label="备注">

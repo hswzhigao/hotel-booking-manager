@@ -33,9 +33,11 @@ async function validatePayload(body) {
   if (!STATUSES.includes(status)) bad(400, '状态不合法');
   if (!CHANNELS.includes(channel)) bad(400, '成交渠道不合法');
   const bu = Number(benefit_used) === 1 ? 1 : 0;
-  const bcu = Number(benefit_count_used) || 1;
+  if (benefit_count_used === null || benefit_count_used === undefined || benefit_count_used === '' || isNaN(Number(benefit_count_used))) {
+    bad(400, '权益张数不合法');
+  }
+  const bcu = Number(benefit_count_used);
   if (!Number.isInteger(bcu) || bcu < 1 || bcu > 99) bad(400, '权益张数应为 1-99');
-  if (bu === 0 && bcu !== 1) bad(400, '未使用权益时张数应为默认 1');
   const ct = Number(cost_total) || 0;
   if (ct < 0) bad(400, '成本价不合法');
   if (!Array.isArray(items) || items.length === 0) bad(400, '至少需要一间房');
@@ -188,10 +190,7 @@ router.post('/', async (req, res, next) => {
       await conn.query('INSERT INTO booking_items (booking_id, room_type_id, price) VALUES (?,?,?)', [bid, it.room_type_id, it.price]);
     }
     if (effectiveUse(p.benefitUsed, p.status) === 1) {
-      const [c] = await conn.query(
-        'UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count - 1 WHERE id = ? AND hotel_benefit_count >= 1', [p.benefit_holder_id]
-      );
-      if (c.affectedRows === 0) { bad(400, '该预订人剩余升级权益不足'); }
+      await adjustHotelBenefit(conn, '-', p.benefit_holder_id, p.benefitCountUsed);
     }
     await conn.commit();
     res.json({ id: bid });
@@ -231,24 +230,21 @@ router.put('/:id', async (req, res, next) => {
     const newUse = effectiveUse(p.benefitUsed, p.status);
     const oldHolder = old.benefit_holder_id || null;
     const newHolder = p.benefit_holder_id || null;
+    const oldCount = oldUse === 1 ? (Number(old.benefit_count_used) || 1) : 0;
+    const newCount = newUse === 1 ? p.benefitCountUsed : 0;
     if (oldHolder !== null && oldHolder === newHolder) {
-      if (newUse === 1 && oldUse === 0) {
-        const [c] = await conn.query(
-          'UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count - 1 WHERE id = ? AND hotel_benefit_count >= 1', [newHolder]
-        );
-        if (c.affectedRows === 0) { bad(400, '该预订人剩余升级权益不足'); }
-      } else if (oldUse === 1 && newUse === 0) {
-        await conn.query('UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count + 1 WHERE id = ?', [oldHolder]);
+      const diff = newCount - oldCount;
+      if (diff > 0) {
+        await adjustHotelBenefit(conn, '-', newHolder, diff);
+      } else if (diff < 0) {
+        await adjustHotelBenefit(conn, '+', oldHolder, -diff);
       }
     } else {
-      if (oldUse === 1 && oldHolder !== null) {
-        await conn.query('UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count + 1 WHERE id = ?', [oldHolder]);
+      if (oldCount > 0 && oldHolder !== null) {
+        await adjustHotelBenefit(conn, '+', oldHolder, oldCount);
       }
-      if (newUse === 1) {
-        const [c] = await conn.query(
-          'UPDATE benefit_holders SET hotel_benefit_count = hotel_benefit_count - 1 WHERE id = ? AND hotel_benefit_count >= 1', [newHolder]
-        );
-        if (c.affectedRows === 0) { bad(400, '该预订人剩余升级权益不足'); }
+      if (newCount > 0) {
+        await adjustHotelBenefit(conn, '-', newHolder, newCount);
       }
     }
     await conn.commit();

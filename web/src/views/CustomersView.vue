@@ -3,14 +3,22 @@
     <el-card shadow="never">
       <div class="page-toolbar">
         <el-input
-          v-model="search"
+          v-model="filters.search"
           placeholder="搜索姓名 / 微信 / 电话"
           clearable
-          style="width: 240px"
+          style="width: 220px"
           @keyup.enter="loadList(1)"
         />
+        <el-select v-model="filters.is_hotel" placeholder="酒店客户" clearable style="width: 120px">
+          <el-option label="酒店客户" :value="1" />
+          <el-option label="非酒店客户" :value="0" />
+        </el-select>
+        <el-select v-model="filters.is_golf" placeholder="高尔夫客户" clearable style="width: 130px">
+          <el-option label="高尔夫客户" :value="1" />
+          <el-option label="非高尔夫客户" :value="0" />
+        </el-select>
         <el-button type="primary" @click="loadList(1)">查询</el-button>
-        <el-button @click="resetSearch">重置</el-button>
+        <el-button @click="resetFilters">重置</el-button>
         <div class="toolbar-spacer" />
         <el-button type="primary" :icon="Plus" @click="openCreate">新建客户</el-button>
       </div>
@@ -23,11 +31,11 @@
         <el-table-column prop="phone" label="电话" min-width="120">
           <template #default="{ row }">{{ row.phone || '-' }}</template>
         </el-table-column>
-        <el-table-column label="剩余权益" width="90" align="center">
+        <el-table-column label="标签" width="150" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.benefit_count > 0 ? 'warning' : 'info'" size="small">
-              {{ row.benefit_count }} 次
-            </el-tag>
+            <el-tag v-if="row.is_hotel" type="primary" size="small">酒店</el-tag>
+            <el-tag v-if="row.is_golf" type="success" size="small" class="tag-gap">高尔夫</el-tag>
+            <span v-if="!row.is_hotel && !row.is_golf">-</span>
           </template>
         </el-table-column>
         <el-table-column prop="booking_count" label="预定次数" width="90" align="center" />
@@ -67,7 +75,7 @@
       width="480px"
       destroy-on-close
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="80px">
+      <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
         <el-form-item label="姓名" prop="name">
           <el-input v-model="form.name" maxlength="50" placeholder="客户姓名" />
         </el-form-item>
@@ -77,9 +85,11 @@
         <el-form-item label="电话" prop="phone">
           <el-input v-model="form.phone" maxlength="30" placeholder="手机号" />
         </el-form-item>
-        <el-form-item label="剩余权益" prop="benefit_count">
-          <el-input-number v-model="form.benefit_count" :min="0" :step="1" />
-          <div class="field-tip">手动调整用于充值 / 纠错，预定消耗自动扣减</div>
+        <el-form-item label="酒店客户">
+          <el-switch v-model="form.is_hotel" active-text="酒店客户" />
+        </el-form-item>
+        <el-form-item label="高尔夫客户">
+          <el-switch v-model="form.is_golf" active-text="高尔夫客户" />
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.notes" type="textarea" :rows="2" maxlength="500" />
@@ -92,19 +102,57 @@
     </el-dialog>
 
     <!-- 客户详情抽屉 -->
-    <el-drawer v-model="detailVisible" :title="`客户详情 - ${detail.customer?.name || ''}`" size="640px">
+    <el-drawer v-model="detailVisible" :title="`客户详情 - ${detail.customer?.name || ''}`" size="720px">
       <el-descriptions :column="2" border>
         <el-descriptions-item label="姓名">{{ detail.customer?.name }}</el-descriptions-item>
-        <el-descriptions-item label="剩余权益">{{ detail.customer?.benefit_count }} 次</el-descriptions-item>
+        <el-descriptions-item label="标签">
+          <el-tag v-if="detail.customer?.is_hotel" type="primary" size="small">酒店</el-tag>
+          <el-tag v-if="detail.customer?.is_golf" type="success" size="small" class="tag-gap">高尔夫</el-tag>
+          <span v-if="!detail.customer?.is_hotel && !detail.customer?.is_golf">-</span>
+        </el-descriptions-item>
         <el-descriptions-item label="微信">{{ detail.customer?.wechat || '-' }}</el-descriptions-item>
         <el-descriptions-item label="电话">{{ detail.customer?.phone || '-' }}</el-descriptions-item>
         <el-descriptions-item label="预定次数">{{ detail.customer?.booking_count }}</el-descriptions-item>
+        <el-descriptions-item label="高尔夫订单数">{{ (detail.golf_orders || []).length }}</el-descriptions-item>
         <el-descriptions-item label="间夜数">{{ detail.customer?.total_room_nights }}</el-descriptions-item>
         <el-descriptions-item label="累计消费">
           <span class="money">{{ money(detail.customer?.total_spend) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="备注">{{ detail.customer?.notes || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="备注" :span="2">{{ detail.customer?.notes || '-' }}</el-descriptions-item>
       </el-descriptions>
+
+      <h4 class="detail-title">高尔夫订单</h4>
+      <el-table
+        :data="detail.golf_orders || []"
+        v-loading="detailLoading"
+        empty-text="暂无高尔夫订单"
+        size="small"
+      >
+        <el-table-column prop="play_date" label="打球日期" width="105">
+          <template #default="{ row }">{{ dateText(row.play_date) }}</template>
+        </el-table-column>
+        <el-table-column prop="course_name" label="球场" min-width="120" show-overflow-tooltip />
+        <el-table-column label="预订人" width="90">
+          <template #default="{ row }">{{ row.benefit_holder_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="权益种类" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.benefit_type_name" type="warning" size="small">{{ row.benefit_type_name }}</el-tag>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="players" label="人数" width="60" align="center" />
+        <el-table-column label="卖价" width="95" align="right">
+          <template #default="{ row }"><span class="money">{{ money(row.sale_price) }}</span></template>
+        </el-table-column>
+        <el-table-column label="状态" width="80">
+          <template #default="{ row }">
+            <el-tag :type="golfStatusMeta(row.status).type" size="small">
+              {{ golfStatusMeta(row.status).label }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
 
       <h4 class="detail-title">历史预定</h4>
       <el-table :data="detail.bookings || []" v-loading="detailLoading" empty-text="暂无预定记录" size="small">
@@ -150,7 +198,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { customersApi } from '../api'
-import { money, dateText, statusMeta } from '../utils/format'
+import { money, dateText, statusMeta, golfStatusMeta } from '../utils/format'
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -158,7 +206,11 @@ const rows = ref([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
-const search = ref('')
+const filters = reactive({
+  search: '',
+  is_hotel: null,
+  is_golf: null,
+})
 
 async function loadList(p = page.value) {
   loading.value = true
@@ -166,7 +218,9 @@ async function loadList(p = page.value) {
     const data = await customersApi.list({
       page: p,
       page_size: pageSize.value,
-      search: search.value || undefined,
+      search: filters.search || undefined,
+      is_hotel: filters.is_hotel ?? undefined,
+      is_golf: filters.is_golf ?? undefined,
     })
     rows.value = data.items || []
     total.value = data.total || 0
@@ -178,8 +232,10 @@ async function loadList(p = page.value) {
   }
 }
 
-function resetSearch() {
-  search.value = ''
+function resetFilters() {
+  filters.search = ''
+  filters.is_hotel = null
+  filters.is_golf = null
   loadList(1)
 }
 
@@ -202,7 +258,8 @@ const emptyForm = () => ({
   name: '',
   wechat: '',
   phone: '',
-  benefit_count: 0,
+  is_hotel: true,
+  is_golf: false,
   notes: '',
 })
 
@@ -210,7 +267,6 @@ const form = reactive(emptyForm())
 
 const formRules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  benefit_count: [{ required: true, message: '请填写剩余权益次数', trigger: 'blur' }],
 }
 
 function openCreate() {
@@ -224,7 +280,8 @@ function openEdit(row) {
     name: row.name,
     wechat: row.wechat || '',
     phone: row.phone || '',
-    benefit_count: Number(row.benefit_count || 0),
+    is_hotel: !!row.is_hotel,
+    is_golf: !!row.is_golf,
     notes: row.notes || '',
   })
   formVisible.value = true
@@ -237,7 +294,8 @@ async function onSave() {
     name: form.name,
     wechat: form.wechat || '',
     phone: form.phone || '',
-    benefit_count: form.benefit_count,
+    is_hotel: form.is_hotel ? 1 : 0,
+    is_golf: form.is_golf ? 1 : 0,
     notes: form.notes || '',
   }
   saving.value = true
@@ -252,7 +310,7 @@ async function onSave() {
     formVisible.value = false
     await loadList()
   } catch (e) {
-    // 错误提示已由拦截器统一处理
+    // 400/409 等错误提示已由拦截器统一处理
   } finally {
     saving.value = false
   }
@@ -261,7 +319,7 @@ async function onSave() {
 async function onDelete(row) {
   try {
     await ElMessageBox.confirm(
-      `确定删除客户「${row.name}」吗？有预定记录的客户无法删除。`,
+      `确定删除客户「${row.name}」吗？有预定或高尔夫订单记录的客户无法删除。`,
       '删除确认',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
     )
@@ -280,7 +338,7 @@ async function onDelete(row) {
 // ===== 详情 =====
 const detailVisible = ref(false)
 const detailLoading = ref(false)
-const detail = ref({ customer: null, bookings: [] })
+const detail = ref({ customer: null, bookings: [], golf_orders: [] })
 
 async function openDetail(row) {
   detailVisible.value = true
@@ -288,7 +346,7 @@ async function openDetail(row) {
   try {
     detail.value = await customersApi.detail(row.id)
   } catch (e) {
-    detail.value = { customer: null, bookings: [] }
+    detail.value = { customer: null, bookings: [], golf_orders: [] }
   } finally {
     detailLoading.value = false
   }
@@ -303,11 +361,8 @@ onMounted(() => loadList(1))
   justify-content: flex-end;
 }
 
-.field-tip {
-  font-size: 12px;
-  color: #909399;
-  line-height: 1.4;
-  margin-top: 4px;
+.tag-gap {
+  margin-left: 4px;
 }
 
 .detail-title {

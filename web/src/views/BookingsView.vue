@@ -63,7 +63,7 @@
         </el-table-column>
         <el-table-column prop="customer_name" label="客户" min-width="90" />
         <el-table-column prop="hotel_name" label="酒店" min-width="130" />
-        <el-table-column label="权益人" width="90">
+        <el-table-column label="预订人" width="90">
           <template #default="{ row }">{{ row.benefit_holder_name || '-' }}</template>
         </el-table-column>
         <el-table-column label="入住/离店" min-width="175">
@@ -163,10 +163,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="权益人">
+        <el-form-item label="预订人">
           <el-select
             v-model="form.benefit_holder_id"
-            placeholder="选择权益人（可空）"
+            placeholder="选择预订人（可空）"
             filterable
             clearable
             style="width: 100%"
@@ -183,7 +183,7 @@
               </div>
             </el-option>
           </el-select>
-          <div v-if="hotelNeedsPresence" class="field-tip">该酒店需本人到场，优先选择带「✓愿意到场」的权益人</div>
+          <div v-if="hotelNeedsPresence" class="field-tip">该酒店需本人到场，优先选择带「✓愿意到场」的预订人</div>
         </el-form-item>
         <el-form-item label="入住/离店" prop="dateRange">
           <el-date-picker
@@ -257,15 +257,16 @@
             预计利润：{{ profitText(formSaleTotal - form.cost_total) }}
           </span>
         </el-form-item>
-        <el-form-item label="升级权益">
+        <el-form-item label="酒店权益">
           <div class="benefit-line">
-            <el-checkbox v-model="form.benefit_used" :disabled="!form.customer_id">
-              使用升级权益
-            </el-checkbox>
-            <el-text v-if="selectedCustomer" type="info" size="small">
-              {{ selectedCustomer.name }} 剩余 {{ selectedCustomer.benefit_count }} 次
+            <el-checkbox v-model="form.benefit_used">使用酒店权益</el-checkbox>
+            <el-text v-if="formHolder" type="info" size="small">
+              {{ formHolder.name }} 酒店权益 剩余 {{ formHolder.hotel_benefit_count }} 次
             </el-text>
-            <el-text v-if="selectedCustomer && selectedCustomer.benefit_count <= 0" type="danger" size="small">
+            <el-text v-if="form.benefit_used && !form.benefit_holder_id" type="danger" size="small">
+              使用酒店权益需选择预订人
+            </el-text>
+            <el-text v-if="formHolder && formHolder.hotel_benefit_count <= 0" type="danger" size="small">
               剩余不足，勾选后保存将被拒绝
             </el-text>
           </div>
@@ -299,7 +300,7 @@
         <el-descriptions-item label="下单时间" :span="2">{{ datetimeText(detail.order_time) }}</el-descriptions-item>
         <el-descriptions-item label="客户">{{ detail.customer_name }}</el-descriptions-item>
         <el-descriptions-item label="酒店">{{ detail.hotel_name }}</el-descriptions-item>
-        <el-descriptions-item label="权益人">
+        <el-descriptions-item label="预订人">
           <template v-if="detail.benefit_holder_name">
             {{ detail.benefit_holder_name }}
             <el-tag v-if="detailHolder && detailHolder.willing_present" type="success" size="small">✓ 愿意到场</el-tag>
@@ -320,7 +321,7 @@
         <el-descriptions-item label="利润">
           <span class="money" :class="profitClass(detail.profit)">{{ profitText(detail.profit) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="升级权益">
+        <el-descriptions-item label="酒店权益">
           {{ detail.benefit_used ? '已使用' : '未使用' }}
         </el-descriptions-item>
         <el-descriptions-item label="状态">
@@ -374,7 +375,7 @@ async function loadOptions() {
   }
 }
 
-// 权益人选项：姓名（权益摘要）；willing_present=1 标注并排前
+// 预订人选项：姓名（权益摘要）；willing_present=1 标注并排前
 const sortedHolderOptions = computed(() =>
   [...holderOptions.value].sort((a, b) => (b.willing_present ? 1 : 0) - (a.willing_present ? 1 : 0)),
 )
@@ -490,8 +491,9 @@ const itemPriceRules = [
   { type: 'number', min: 0, message: '价格不能为负', trigger: 'blur' },
 ]
 
-const selectedCustomer = computed(() =>
-  customerOptions.value.find((c) => c.id === form.customer_id) || null,
+// 所选预订人（酒店权益剩余次数随切换刷新）
+const formHolder = computed(() =>
+  holderOptions.value.find((h) => h.id === form.benefit_holder_id) || null,
 )
 
 const formNights = computed(() => {

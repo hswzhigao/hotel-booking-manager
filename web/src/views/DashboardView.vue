@@ -9,6 +9,16 @@
       </el-col>
     </el-row>
 
+    <div class="section-title">高尔夫业务</div>
+    <el-row :gutter="16">
+      <el-col v-for="card in golfCards" :key="card.label" :xs="12" :sm="12" :md="6">
+        <el-card class="stat-card" shadow="hover">
+          <div class="stat-label">{{ card.label }}</div>
+          <div class="stat-value" :class="card.cls || ''">{{ card.value }}</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-card shadow="never" class="recent-card">
       <template #header>最近预定</template>
       <el-table :data="recentBookings" v-loading="loading" empty-text="暂无预定数据">
@@ -64,6 +74,11 @@ const summary = ref({
   month_sale: 0,
   month_profit: 0,
   recent_bookings: [],
+  // V3 高尔夫统计
+  golf_order_count: 0,
+  golf_total_sale: 0,
+  golf_total_cost: 0,
+  golf_total_profit: 0,
 })
 
 const recentBookings = computed(() => summary.value.recent_bookings || [])
@@ -84,6 +99,17 @@ const cards = computed(() => [
     label: '本月利润',
     value: profitText(summary.value.month_profit),
     cls: Number(summary.value.month_profit) >= 0 ? 'positive' : 'negative',
+  },
+])
+
+const golfCards = computed(() => [
+  { label: '高尔夫订单数', value: summary.value.golf_order_count },
+  { label: '高尔夫总收入', value: money(summary.value.golf_total_sale) },
+  { label: '高尔夫总成本', value: money(summary.value.golf_total_cost) },
+  {
+    label: '高尔夫总利润',
+    value: profitText(summary.value.golf_total_profit),
+    cls: Number(summary.value.golf_total_profit) >= 0 ? 'positive' : 'negative',
   },
 ])
 
@@ -128,6 +154,13 @@ function goBookings() {
 
 .stat-value.negative {
   color: #f56c6c;
+}
+
+.section-title {
+  margin: 8px 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
 }
 
 .recent-card {
