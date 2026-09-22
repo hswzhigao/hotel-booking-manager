@@ -10,6 +10,7 @@ const statsRoutes = require('./routes/stats');
 const benefitHoldersRoutes = require('./routes/benefitHolders');
 const golfOrdersRoutes = require('./routes/golfOrders');
 const golfBenefitTypesRoutes = require('./routes/golfBenefitTypes');
+const optionDictRoutes = require('./routes/optionDict');
 
 const app = express();
 app.use(express.json());
@@ -32,6 +33,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/benefit-holders', benefitHoldersRoutes);
 app.use('/api/golf-orders', golfOrdersRoutes);
 app.use('/api/golf-benefit-types', golfBenefitTypesRoutes);
+app.use('/api/option-dict', optionDictRoutes);
 
 app.use((req, res) => res.status(404).json({ error: '接口不存在' }));
 

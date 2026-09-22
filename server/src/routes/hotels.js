@@ -29,6 +29,13 @@ router.get('/', async (req, res, next) => {
 router.get('/:id/room-types', async (req, res, next) => {
   try {
     const [rows] = await pool.query('SELECT * FROM room_types WHERE hotel_id = ? ORDER BY id DESC', [req.params.id]);
+    const ids = rows.map(r => r.id);
+    const ratesMap = {};
+    if (ids.length) {
+      const [rates] = await pool.query('SELECT id, room_type_id, label, price FROM room_type_rates WHERE room_type_id IN (?) ORDER BY id', [ids]);
+      for (const r of rates) (ratesMap[r.room_type_id] = ratesMap[r.room_type_id] || []).push({ id: r.id, label: r.label, price: r.price });
+    }
+    rows.forEach(r => { r.rates = ratesMap[r.id] || []; });
     res.json(rows);
   } catch (e) { next(e); }
 });

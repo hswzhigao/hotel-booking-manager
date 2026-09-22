@@ -65,7 +65,8 @@ async function validatePayload(body) {
     if (rt.hotel_id !== Number(hotel_id)) bad(400, `房型「${rt.name}」不属于所选酒店`);
   }
   const nights = Math.round((new Date(`${co}T00:00:00`) - new Date(`${ci}T00:00:00`)) / 86400000);
-  const saleTotal = Math.round(items.reduce((s, i) => s + Number(i.price), 0) * 100) / 100;
+  // V5：明细价为每晚单价，卖价合计 = 晚数 × Σ(每晚价)
+  const saleTotal = Math.round(nights * items.reduce((s, i) => s + Number(i.price), 0) * 100) / 100;
   return {
     customer_id: Number(customer_id), hotel_id: Number(hotel_id),
     check_in: ci, check_out: co, nights, saleTotal, costTotal: ct,
