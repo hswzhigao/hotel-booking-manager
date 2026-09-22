@@ -334,15 +334,15 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { golfOrdersApi, customersApi, benefitHoldersApi } from '../api'
+import { golfOrdersApi, customersApi, benefitHoldersApi , optionDictApi} from '../api'
 import {
   money, profitText, profitClass, dateText, datetimeText,
   toDatetimeString, parseDatetime, isWeekend,
   golfStatusMeta, GOLF_STATUS_MAP, channelText, CHANNEL_MAP, availabilityMeta,
 } from '../utils/format'
 
-// 预设球场（V3.1 契约）：下拉预设 + 历史球场（golf-orders/courses）合并
-const PRESET_COURSES = ['上海东镇高尔夫球场', '上海金桥高尔夫尊运动公园']
+// 球场来源：字段管理-球场字典（golf_course）∪ 历史订单球场（golf-orders/courses）
+const dictCourses = ref([])
 
 // ===== 下拉选项 =====
 const customerOptions = ref([])
@@ -351,21 +351,23 @@ const historyCourses = ref([])
 
 async function loadOptions() {
   try {
-    const [cs, hs, courses] = await Promise.all([
+    const [cs, hs, courses, dc] = await Promise.all([
       customersApi.list({ page: 1, page_size: 100 }),
       benefitHoldersApi.list({ page: 1, page_size: 200 }),
       golfOrdersApi.courses(),
+      optionDictApi.list({ category: 'golf_course' }).catch(() => []),
     ])
     customerOptions.value = cs.items || []
     holderOptions.value = (hs.items || []).map((h) => ({ ...h, provides_golf: h.provides_golf ?? 1 }))
     historyCourses.value = Array.isArray(courses) ? courses : []
+    dictCourses.value = (Array.isArray(dc) ? dc : (dc.items || [])).map((x) => x.label)
   } catch (e) {
     // 错误提示已由拦截器统一处理
   }
 }
 
 const courseOptions = computed(() => {
-  const set = new Set(PRESET_COURSES)
+  const set = new Set(dictCourses.value)
   historyCourses.value.forEach((c) => set.add(c))
   return [...set]
 })

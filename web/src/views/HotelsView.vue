@@ -34,6 +34,18 @@
         <el-table-column type="expand">
           <template #default="{ row }">
             <div class="expand-wrap">
+              <div v-if="splitCheckinInfo(row.checkin_info_required).length" class="checkin-tags">
+                <span class="checkin-tags-label">需提供信息：</span>
+                <el-tag
+                  v-for="t in splitCheckinInfo(row.checkin_info_required)"
+                  :key="t"
+                  size="small"
+                  type="info"
+                  class="checkin-tag"
+                >
+                  {{ t }}
+                </el-tag>
+              </div>
               <div class="expand-toolbar">
                 <span class="expand-title">{{ row.name }} - 房型管理</span>
                 <el-button size="small" type="primary" :icon="Plus" @click="openRoomCreate(row)">
@@ -49,10 +61,13 @@
                 <el-table-column prop="bed_type" label="床型" min-width="100">
                   <template #default="{ row: rt }">{{ rt.bed_type || '-' }}</template>
                 </el-table-column>
-                <el-table-column label="参考价" width="110" align="right">
+                <el-table-column label="参考价（每晚）" width="125" align="right">
                   <template #default="{ row: rt }">
                     <span class="money">{{ rt.default_price != null ? money(rt.default_price) : '-' }}</span>
                   </template>
+                </el-table-column>
+                <el-table-column label="价格档位" min-width="150">
+                  <template #default="{ row: rt }">{{ ratesSummary(rt) || '-' }}</template>
                 </el-table-column>
                 <el-table-column prop="notes" label="备注" min-width="140">
                   <template #default="{ row: rt }">{{ rt.notes || '-' }}</template>
@@ -64,7 +79,7 @@
                   </template>
                 </el-table-column>
               </el-table>
-              <el-text type="info" size="small">参考价仅作提示，预定价格在预定单中逐间填写</el-text>
+              <el-text type="info" size="small">参考价（每晚）仅作提示；建单时选房型自动带出，也可点档位快速填价</el-text>
             </div>
           </template>
         </el-table-column>
@@ -108,6 +123,17 @@
             </el-tag>
           </div>
           <div class="m-sub">{{ [row.city, row.address].filter(Boolean).join(' · ') || '-' }}</div>
+          <div v-if="splitCheckinInfo(row.checkin_info_required).length" class="m-checkin-tags">
+            <el-tag
+              v-for="t in splitCheckinInfo(row.checkin_info_required)"
+              :key="t"
+              size="small"
+              type="info"
+              class="checkin-tag"
+            >
+              {{ t }}
+            </el-tag>
+          </div>
           <div class="m-line">
             <span class="m-label">房型/预定</span>
             <span class="m-value">{{ row.room_type_count }} / {{ row.booking_count }}</span>
@@ -166,13 +192,19 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="需提供信息">
-          <el-input
-            v-model="form.checkin_info_required"
-            type="textarea"
-            :rows="2"
-            maxlength="1000"
-            placeholder="如：姓名+身份证后四位+手机号"
-          />
+          <el-select
+            v-model="form.checkinInfoValues"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            :reserve-keyword="false"
+            placeholder="选择预设值，或输入后回车自定义"
+            style="width: 100%"
+          >
+            <el-option v-for="o in checkinInfoOptions" :key="o.id" :label="o.label" :value="o.label" />
+          </el-select>
+          <div class="field-tip">选项来自「字段管理」；自定义输入的新值只保存到本酒店，不进字典</div>
         </el-form-item>
         <el-form-item label="办理流程">
           <el-input
@@ -200,24 +232,51 @@
       width="440px"
       destroy-on-close
     >
-      <el-form ref="roomFormRef" :model="roomForm" :rules="roomFormRules" label-width="70px">
+      <el-form ref="roomFormRef" :model="roomForm" :rules="roomFormRules" label-width="110px">
         <el-form-item label="名称" prop="name">
           <el-input v-model="roomForm.name" maxlength="100" placeholder="如：大床房" />
         </el-form-item>
         <el-form-item label="床型">
           <el-input v-model="roomForm.bed_type" maxlength="50" placeholder="如：1.8米大床" />
         </el-form-item>
-        <el-form-item label="参考价" prop="default_price">
+        <el-form-item label="参考价（每晚）" prop="default_price">
           <el-input-number
             v-model="roomForm.default_price"
             :min="0"
             :precision="2"
             :step="50"
             :controls="false"
-            placeholder="参考价"
+            placeholder="参考价（每晚）"
             style="width: 100%"
           />
-          <div class="field-tip">参考价仅作提示，预定价格在预定单中逐间填写</div>
+          <div class="field-tip">仅作提示，预定建单时自动带出，可改</div>
+        </el-form-item>
+        <el-form-item label="价格档位">
+          <div class="rates-editor">
+            <div v-for="(r, i) in roomForm.rates" :key="i" class="rate-row">
+              <el-input v-model="r.label" maxlength="50" placeholder="档位名，如：平日" class="rate-label" />
+              <el-input-number
+                v-model="r.price"
+                :min="0"
+                :precision="2"
+                :step="50"
+                :controls="false"
+                placeholder="每晚价"
+                class="rate-price"
+              />
+              <el-button
+                :icon="Delete"
+                circle
+                type="danger"
+                plain
+                size="small"
+                title="删除档位"
+                @click="roomForm.rates.splice(i, 1)"
+              />
+            </div>
+            <el-button size="small" :icon="Plus" plain type="primary" @click="addRate">添加档位</el-button>
+            <div class="field-tip">如：平日 520 / 周末 660 / 国庆 888；建单时点档位一键填入每晚价</div>
+          </div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="roomForm.notes" type="textarea" :rows="2" maxlength="500" />
@@ -272,7 +331,7 @@
         <el-button size="small" type="primary" :icon="Plus" @click="openRoomCreate(mobileRoomsHotel)">
           新增房型
         </el-button>
-        <el-text type="info" size="small">参考价仅作提示，预定价格在预定单中逐间填写</el-text>
+        <el-text type="info" size="small">参考价（每晚）仅作提示，建单时可点档位快速填价</el-text>
       </div>
       <div v-for="rt in roomTypeMap[mobileRoomsHotel?.id] || []" :key="rt.id" class="mobile-room-row">
         <div class="mobile-room-info">
@@ -280,6 +339,7 @@
           <div class="mobile-room-meta">
             {{ rt.bed_type || '-' }} · {{ rt.default_price != null ? money(rt.default_price) : '无参考价' }}{{ rt.notes ? ` · ${rt.notes}` : '' }}
           </div>
+          <div v-if="ratesSummary(rt)" class="mobile-room-rates">{{ ratesSummary(rt) }}</div>
         </div>
         <el-button text type="primary" size="small" @click="openRoomEdit(mobileRoomsHotel, rt)">编辑</el-button>
         <el-button text type="danger" size="small" @click="onRoomDelete(mobileRoomsHotel, rt)">删除</el-button>
@@ -296,9 +356,28 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, DocumentCopy } from '@element-plus/icons-vue'
-import { hotelsApi, roomTypesApi } from '../api'
+import { Plus, Delete, DocumentCopy } from '@element-plus/icons-vue'
+import { hotelsApi, roomTypesApi, optionDictApi } from '../api'
 import { money } from '../utils/format'
+
+// ===== 「需提供信息」预设值字典（字段管理维护，酒店表单多选来源）=====
+const checkinInfoOptions = ref([])
+
+async function loadCheckinInfoOptions() {
+  try {
+    checkinInfoOptions.value = await optionDictApi.list({ category: 'checkin_info' })
+  } catch (e) {
+    checkinInfoOptions.value = []
+  }
+}
+
+// 逗号分隔文本 → 标签数组（存储列复用，展示/回显统一走此函数）
+function splitCheckinInfo(s) {
+  return String(s || '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)
+}
 
 // ===== 列表 =====
 const loading = ref(false)
@@ -371,7 +450,7 @@ const emptyForm = () => ({
   notes: '',
   official_phone: '',
   presenceValue: 'unknown', // unknown=未确认(null) / present=需本人到场(1) / absent=无需到场(0)
-  checkin_info_required: '',
+  checkinInfoValues: [], // 需提供信息（数组，提交时 join(',') 存逗号文本）
   checkin_process: '',
 })
 const form = reactive(emptyForm())
@@ -414,7 +493,7 @@ function openEdit(row) {
     notes: row.notes || '',
     official_phone: row.official_phone || '',
     presenceValue: presenceToValue(row.checkin_presence),
-    checkin_info_required: row.checkin_info_required || '',
+    checkinInfoValues: splitCheckinInfo(row.checkin_info_required),
     checkin_process: row.checkin_process || '',
   })
   formVisible.value = true
@@ -431,7 +510,7 @@ async function onSave() {
     notes: form.notes || '',
     official_phone: form.official_phone || '',
     checkin_presence: valueToPresence(form.presenceValue),
-    checkin_info_required: form.checkin_info_required || '',
+    checkin_info_required: form.checkinInfoValues.join(','),
     checkin_process: form.checkin_process || '',
   }
   saving.value = true
@@ -593,12 +672,43 @@ const emptyRoomForm = () => ({
   name: '',
   bed_type: '',
   default_price: null,
+  rates: [], // 价格档位 [{label, price}]，提交整组替换
   notes: '',
 })
 const roomForm = reactive(emptyRoomForm())
 
 const roomFormRules = {
   name: [{ required: true, message: '请输入房型名称', trigger: 'blur' }],
+}
+
+// 档位摘要：如「平日¥520.00 · 国庆¥888.00」（列表/展开展示用）
+function ratesSummary(rt) {
+  return (rt.rates || [])
+    .map((r) => `${r.label}¥${Number(r.price).toFixed(0)}`)
+    .join(' · ')
+}
+
+function addRate() {
+  roomForm.rates.push({ label: '', price: null })
+}
+
+// 表单档位行 → 提交数组：整行空忽略；有名无价/负价前端拦截（后端同样校验）
+function ratesPayload() {
+  const out = []
+  for (const r of roomForm.rates) {
+    const label = String(r.label || '').trim()
+    if (!label && r.price == null) continue
+    if (!label) {
+      ElMessage.warning('档位名不能为空')
+      return null
+    }
+    if (r.price == null || isNaN(Number(r.price)) || Number(r.price) < 0) {
+      ElMessage.warning(`档位「${label}」价格不合法`)
+      return null
+    }
+    out.push({ label, price: Number(r.price) })
+  }
+  return out
 }
 
 function openRoomCreate(hotelRow) {
@@ -617,6 +727,7 @@ function openRoomEdit(hotelRow, rt) {
     name: rt.name,
     bed_type: rt.bed_type || '',
     default_price: rt.default_price != null ? Number(rt.default_price) : null,
+    rates: (rt.rates || []).map((r) => ({ label: r.label, price: Number(r.price) })),
     notes: rt.notes || '',
   })
   roomFormVisible.value = true
@@ -625,11 +736,14 @@ function openRoomEdit(hotelRow, rt) {
 async function onRoomSave() {
   const valid = await roomFormRef.value.validate().catch(() => false)
   if (!valid) return
+  const rates = ratesPayload()
+  if (rates === null) return
   const payload = {
     hotel_id: roomForm.hotel_id,
     name: roomForm.name,
     bed_type: roomForm.bed_type || '',
     default_price: roomForm.default_price != null ? Number(roomForm.default_price) : null,
+    rates,
     notes: roomForm.notes || '',
   }
   roomSaving.value = true
@@ -671,7 +785,10 @@ async function onRoomDelete(hotelRow, rt) {
   }
 }
 
-onMounted(() => loadList(1))
+onMounted(() => {
+  loadList(1)
+  loadCheckinInfoOptions()
+})
 </script>
 
 <style scoped>
@@ -682,6 +799,68 @@ onMounted(() => loadList(1))
 
 .expand-wrap {
   padding: 8px 12px 12px 48px;
+}
+
+/* 需提供信息标签串（行展开顶部） */
+.checkin-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 10px;
+}
+
+.checkin-tags-label {
+  font-size: 13px;
+  color: #606266;
+}
+
+.checkin-tag {
+  margin-right: 0;
+}
+
+.m-checkin-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+/* 价格档位编辑器（房型 Dialog） */
+.rates-editor {
+  width: 100%;
+}
+
+.rate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rate-row:last-of-type {
+  margin-bottom: 10px;
+}
+
+.rate-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.rate-price {
+  width: 120px;
+  flex-shrink: 0;
+}
+
+/* 375px 下档位行折行：档位名独占一行，价格+删除按钮第二行 */
+@media (max-width: 768px) {
+  .rate-row {
+    flex-wrap: wrap;
+  }
+
+  .rate-label {
+    flex: 1 1 100%;
+  }
 }
 
 .expand-toolbar {
@@ -750,6 +929,13 @@ onMounted(() => loadList(1))
 .mobile-room-meta {
   font-size: 12px;
   color: #909399;
+  margin-top: 2px;
+  word-break: break-all;
+}
+
+.mobile-room-rates {
+  font-size: 12px;
+  color: #409eff;
   margin-top: 2px;
   word-break: break-all;
 }

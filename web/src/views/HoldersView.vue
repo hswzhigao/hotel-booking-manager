@@ -35,7 +35,6 @@
         <el-button type="primary" @click="loadList(1)">查询</el-button>
         <el-button @click="resetFilters">重置</el-button>
         <div class="toolbar-spacer" />
-        <el-button plain :icon="Collection" @click="openTypesDialog">权益种类</el-button>
         <el-button type="primary" :icon="Plus" @click="openCreate">新建预订人</el-button>
       </div>
 
@@ -79,7 +78,6 @@
           </el-select>
           <el-button @click="resetFilters">重置</el-button>
           <div class="toolbar-spacer" />
-          <el-button plain :icon="Collection" @click="openTypesDialog">权益种类</el-button>
           <el-button type="primary" :icon="Plus" @click="openCreate">新建预订人</el-button>
         </div>
       </div>
@@ -358,59 +356,6 @@
         <el-button type="primary" :loading="saving" @click="onSave">保存</el-button>
       </template>
     </el-dialog>
-
-    <!-- 权益种类字典 Dialog -->
-    <el-dialog v-model="typesVisible" title="高尔夫权益种类管理" width="640px" destroy-on-close>
-      <div class="type-form">
-        <el-form :inline="true" :model="typeForm" class="type-inline-form">
-          <el-form-item label="名称" required>
-            <el-input v-model="typeForm.name" maxlength="100" placeholder="如：金葵花" style="width: 150px" />
-          </el-form-item>
-          <el-form-item label="适用球场">
-            <el-radio-group v-model="typeForm.scopeMode">
-              <el-radio value="all">全部通用</el-radio>
-              <el-radio value="custom">指定球场</el-radio>
-            </el-radio-group>
-          </el-form-item>
-          <el-form-item v-if="typeForm.scopeMode === 'custom'" label="球场列表">
-            <el-input
-              v-model="typeForm.course_scope"
-              maxlength="200"
-              placeholder="球场名称，逗号分隔（如：上海东镇高尔夫球场,上海金桥高尔夫尊运动公园）"
-              style="width: 360px"
-            />
-          </el-form-item>
-          <el-form-item label="备注">
-            <el-input v-model="typeForm.notes" maxlength="500" placeholder="选填" style="width: 200px" />
-          </el-form-item>
-        </el-form>
-        <div class="type-form-actions">
-          <el-button v-if="typeForm.id" @click="resetTypeForm">取消编辑</el-button>
-          <el-button type="primary" :loading="typeSaving" @click="onSaveType">
-            {{ typeForm.id ? '保存修改' : '新增种类' }}
-          </el-button>
-        </div>
-      </div>
-
-      <el-table :data="benefitTypes" v-loading="typesLoading" empty-text="暂无权益种类" size="small">
-        <el-table-column prop="name" label="名称" min-width="110" />
-        <el-table-column label="适用球场" min-width="220">
-          <template #default="{ row }">
-            <el-tag v-if="scopeIsAll(row.course_scope)" type="success" size="small">全部球场通用</el-tag>
-            <span v-else>{{ row.course_scope }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="notes" label="备注" min-width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.notes || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="130" align="center">
-          <template #default="{ row }">
-            <el-button text type="primary" size="small" @click="onEditType(row)">编辑</el-button>
-            <el-button text type="danger" size="small" @click="onDeleteType(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-dialog>
   </div>
 </template>
 
@@ -656,18 +601,9 @@ async function onDelete(row) {
   }
 }
 
-// ===== 权益种类字典 =====
-const typesVisible = ref(false)
+// ===== 权益种类字典（管理入口已挪至「字段管理」页，此处仅保留下拉数据加载） =====
 const typesLoading = ref(false)
 const benefitTypes = ref([])
-const typeSaving = ref(false)
-
-const emptyTypeForm = () => ({ id: null, name: '', scopeMode: 'all', course_scope: '', notes: '' })
-const typeForm = reactive(emptyTypeForm())
-
-function scopeIsAll(scope) {
-  return !scope || scope === 'all'
-}
 
 async function loadTypes() {
   typesLoading.value = true
@@ -688,77 +624,6 @@ async function ensureTypesLoaded() {
   await loadTypes()
 }
 
-async function openTypesDialog() {
-  typesVisible.value = true
-  resetTypeForm()
-  await loadTypes()
-}
-
-function resetTypeForm() {
-  Object.assign(typeForm, emptyTypeForm())
-}
-
-function onEditType(row) {
-  Object.assign(typeForm, emptyTypeForm(), {
-    id: row.id,
-    name: row.name || '',
-    scopeMode: scopeIsAll(row.course_scope) ? 'all' : 'custom',
-    course_scope: scopeIsAll(row.course_scope) ? '' : row.course_scope,
-    notes: row.notes || '',
-  })
-}
-
-async function onSaveType() {
-  const name = typeForm.name.trim()
-  if (!name) {
-    ElMessage.warning('请输入种类名称')
-    return
-  }
-  if (typeForm.scopeMode === 'custom' && !typeForm.course_scope.trim()) {
-    ElMessage.warning('请填写适用的球场名称（逗号分隔），或改为全部通用')
-    return
-  }
-  const payload = {
-    name,
-    course_scope: typeForm.scopeMode === 'all' ? 'all' : typeForm.course_scope.trim(),
-    notes: typeForm.notes || '',
-  }
-  typeSaving.value = true
-  try {
-    if (typeForm.id) {
-      await golfBenefitTypesApi.update(typeForm.id, payload)
-      ElMessage.success('权益种类已更新')
-    } else {
-      await golfBenefitTypesApi.create(payload)
-      ElMessage.success('权益种类已创建')
-    }
-    resetTypeForm()
-    await loadTypes()
-  } catch (e) {
-    // 400/409 等错误提示已由拦截器统一处理
-  } finally {
-    typeSaving.value = false
-  }
-}
-
-async function onDeleteType(row) {
-  try {
-    await ElMessageBox.confirm(
-      `确定删除权益种类「${row.name}」吗？被预订人持有明细引用的种类无法删除。`,
-      '删除确认',
-      { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
-    )
-  } catch (e) {
-    return
-  }
-  try {
-    await golfBenefitTypesApi.remove(row.id)
-    ElMessage.success('权益种类已删除')
-    await loadTypes()
-  } catch (e) {
-    // 409 等错误提示已由拦截器统一处理
-  }
-}
 
 onMounted(() => loadList(1))
 </script>

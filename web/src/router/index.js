@@ -18,6 +18,7 @@ const routes = [
       { path: 'customers', name: 'customers', component: () => import('../views/CustomersView.vue'), meta: { title: '客户管理' } },
       { path: 'holders', name: 'holders', component: () => import('../views/HoldersView.vue'), meta: { title: '预订人管理' } },
       { path: 'hotels', name: 'hotels', component: () => import('../views/HotelsView.vue'), meta: { title: '酒店管理' } },
+      { path: 'fields', name: 'fields', component: () => import('../views/FieldsView.vue'), meta: { title: '字段管理' } },
       { path: 'settings', name: 'settings', component: () => import('../views/SettingsView.vue'), meta: { title: '系统设置' } },
     ],
   },

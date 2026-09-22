@@ -240,6 +240,7 @@
       size="640px"
       destroy-on-close
     >
+      <div class="drawer-hint">一笔预定可包含多种房型（每行选一种）；每晚价 × 晚数自动汇总</div>
       <el-alert
         v-if="hotelNeedsPresence"
         title="该酒店需预订人本人到场办理"
@@ -326,41 +327,60 @@
           :rules="itemPriceRules"
         >
           <div class="item-row">
-            <el-select
-              v-model="item.room_type_id"
-              placeholder="选择房型"
-              filterable
-              class="item-room"
-            >
-              <el-option
-                v-for="rt in roomTypeOptions"
-                :key="rt.id"
-                :label="rt.name"
-                :value="rt.id"
+            <div class="item-line">
+              <el-select
+                v-model="item.room_type_id"
+                placeholder="选择房型"
+                filterable
+                class="item-room"
+                @change="onItemRoomChange(item)"
+              >
+                <el-option
+                  v-for="rt in roomTypeOptions"
+                  :key="rt.id"
+                  :label="rt.name"
+                  :value="rt.id"
+                />
+              </el-select>
+              <el-button
+                v-if="form.items.length > 1"
+                :icon="Delete"
+                circle
+                type="danger"
+                plain
+                @click="removeItem(index)"
               />
-            </el-select>
-            <el-input-number
-              v-model="item.price"
-              :min="0"
-              :precision="2"
-              :step="50"
-              :controls="false"
-              placeholder="该间总价"
-              class="item-price"
-            />
-            <el-button
-              v-if="form.items.length > 1"
-              :icon="Delete"
-              circle
-              type="danger"
-              plain
-              @click="removeItem(index)"
-            />
+            </div>
+            <div class="item-line">
+              <span class="item-price-label">每晚价</span>
+              <el-input-number
+                v-model="item.price"
+                :min="0"
+                :precision="2"
+                :step="50"
+                :controls="false"
+                placeholder="每晚价"
+                class="item-price"
+              />
+              <span class="item-subtotal">× {{ formNights }}晚 = <b class="money">{{ money(itemSubtotal(item)) }}</b></span>
+            </div>
+            <div v-if="itemRates(item).length" class="rate-chips">
+              <el-tag
+                v-for="r in itemRates(item)"
+                :key="r.id"
+                class="rate-chip"
+                size="small"
+                effect="plain"
+                @click="applyRate(item, r)"
+              >
+                {{ r.label }} ¥{{ Number(r.price).toFixed(0) }}
+              </el-tag>
+            </div>
           </div>
         </el-form-item>
         <el-form-item>
           <el-button :icon="Plus" plain type="primary" @click="addItem">加一间</el-button>
-          <span class="sale-summary">卖价合计：<b class="money">{{ money(formSaleTotal) }}</b></span>
+          <span class="sale-summary">卖价合计（每晚价×晚数）：<b class="money">{{ money(formSaleTotal) }}</b></span>
         </el-form-item>
 
         <el-form-item label="成本合计" prop="cost_total">
@@ -489,12 +509,17 @@
         <el-descriptions-item label="备注" :span="2">{{ detail.notes || '-' }}</el-descriptions-item>
       </el-descriptions>
 
-      <h4 class="detail-items-title">每间价格明细</h4>
+      <h4 class="detail-items-title">每晚价明细</h4>
       <el-table :data="detail.items || []" empty-text="无明细" size="small">
         <el-table-column label="#" type="index" width="45" />
-        <el-table-column prop="room_type_name" label="房型" min-width="120" />
-        <el-table-column label="该间总价" align="right">
+        <el-table-column prop="room_type_name" label="房型" min-width="110" />
+        <el-table-column label="每晚价" align="right" width="90">
           <template #default="{ row }"><span class="money">{{ money(row.price) }}</span></template>
+        </el-table-column>
+        <el-table-column :label="`小计（×${detail.nights || 0}晚）`" align="right" min-width="120">
+          <template #default="{ row }">
+            <span class="money">{{ money(Number(row.price || 0) * (detail.nights || 0)) }}</span>
+          </template>
         </el-table-column>
       </el-table>
     </el-drawer>
@@ -665,8 +690,8 @@ const formRules = {
 }
 
 const itemPriceRules = [
-  { required: true, message: '请填写该间价格', trigger: 'blur' },
-  { type: 'number', min: 0, message: '价格不能为负', trigger: 'blur' },
+  { required: true, message: '请填写每晚价', trigger: 'blur' },
+  { type: 'number', min: 0, message: '每晚价不能为负', trigger: 'blur' },
 ]
 
 // 所选预订人（酒店权益剩余次数随切换刷新）
@@ -689,9 +714,33 @@ const formNights = computed(() => {
   return Math.round(diff / 86400000)
 })
 
+// V5 每晚价模型：行小计 = 每晚价 × 晚数；卖价合计 = Σ行小计（与后端 nights×Σ(price) 一致）
+function itemSubtotal(it) {
+  return (Number(it.price) || 0) * formNights.value
+}
+
 const formSaleTotal = computed(() =>
-  form.items.reduce((sum, it) => sum + (Number(it.price) || 0), 0),
+  form.items.reduce((sum, it) => sum + itemSubtotal(it), 0),
 )
+
+// 该明细行所选房型的价格档位（chips 数据源）
+function itemRates(it) {
+  const rt = roomTypeOptions.value.find((r) => r.id === it.room_type_id)
+  return rt?.rates || []
+}
+
+// 选房型后自动填入该房型参考价（default_price）；已有值不覆盖，仅空时填充
+function onItemRoomChange(it) {
+  const rt = roomTypeOptions.value.find((r) => r.id === it.room_type_id)
+  if (rt && rt.default_price != null && (it.price == null || it.price === '')) {
+    it.price = Number(rt.default_price)
+  }
+}
+
+// 点档位 chip：将该行每晚价设为档位价
+function applyRate(it, rate) {
+  it.price = Number(rate.price)
+}
 
 function openCreate() {
   Object.assign(form, emptyForm())
@@ -805,7 +854,7 @@ async function onSave() {
     return
   }
   if (form.items.some((it) => it.price === null || it.price === undefined || it.price < 0)) {
-    ElMessage.warning('请为每间房填写不小于 0 的价格')
+    ElMessage.warning('请为每行明细填写不小于 0 的每晚价')
     return
   }
   if (form.benefit_used && !form.benefit_holder_id) {
@@ -952,19 +1001,67 @@ onMounted(() => {
   color: #909399;
 }
 
+.drawer-hint {
+  font-size: 12px;
+  color: #909399;
+  background: #f5f7fa;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
 .item-row {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   width: 100%;
+}
+
+.item-line {
+  display: flex;
   align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .item-room {
   flex: 1;
+  min-width: 0;
+}
+
+.item-price-label {
+  font-size: 13px;
+  color: #606266;
+  flex-shrink: 0;
 }
 
 .item-price {
   width: 140px;
+  flex-shrink: 0;
+}
+
+.item-subtotal {
+  font-size: 13px;
+  color: #606266;
+  white-space: nowrap;
+}
+
+.rate-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rate-chip {
+  cursor: pointer;
+  user-select: none;
+}
+
+.rate-chip:hover {
+  opacity: 0.8;
 }
 
 .sale-summary {

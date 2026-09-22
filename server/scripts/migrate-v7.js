@@ -14,7 +14,8 @@ const config = require('../src/config');
       UNIQUE KEY uk_cat_label (category, label)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
     await conn.query(`INSERT IGNORE INTO option_dict (category, label, sort) VALUES
-      ('checkin_info','姓名',1),('checkin_info','身份证号',2),('checkin_info','手机号',3),('checkin_info','信用卡后四位',4)`);
+      ('checkin_info','姓名',1),('checkin_info','身份证号',2),('checkin_info','手机号',3),('checkin_info','信用卡后四位',4),
+      ('golf_course','上海东镇高尔夫球场',1),('golf_course','上海金桥高尔夫尊运动公园',2)`);
     console.log('[1/3] option_dict 就绪（含种子）');
 
     await conn.query(`CREATE TABLE IF NOT EXISTS room_type_rates (

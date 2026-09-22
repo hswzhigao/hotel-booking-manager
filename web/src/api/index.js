@@ -31,10 +31,21 @@ export const hotelsApi = {
 
 // ===== 房型 room-types =====
 export const roomTypesApi = {
-  listByHotel: (hotelId) => http.get(`/hotels/${hotelId}/room-types`),
-  create: (data) => http.post('/room-types', data),
-  update: (id, data) => http.put(`/room-types/${id}`, data),
+  listByHotel: (hotelId) => http.get(`/hotels/${hotelId}/room-types`), // 每房型含 rates:[{id,label,price}]（V5 价格档位）
+  create: (data) => http.post('/room-types', data), // 可带 rates:[{label,price}] 整组写入
+  update: (id, data) => http.put(`/room-types/${id}`, data), // rates 不传=不动，传 []=清空，传数组=整组替换
   remove: (id) => http.delete(`/room-types/${id}`),
+}
+
+// ===== 字段字典 option-dict（V5 引入，预设值字典，删除无引用保护）=====
+export const optionDictApi = {
+  // ?category=（必填）→ [{id,category,label,sort,created_at}]（按 sort,id 排序）
+  list: (params) => http.get('/option-dict', { params }),
+  // {category!,label!,sort?} → {id}；同类别重复 label → 400
+  create: (data) => http.post('/option-dict', data),
+  // {label!,sort?} → {ok:true}
+  update: (id, data) => http.put(`/option-dict/${id}`, data),
+  remove: (id) => http.delete(`/option-dict/${id}`),
 }
 
 // ===== 客户 customers =====

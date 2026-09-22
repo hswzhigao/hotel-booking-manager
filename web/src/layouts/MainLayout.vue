@@ -46,11 +46,12 @@
       </el-main>
     </el-container>
 
-    <!-- 移动端汉堡抽屉菜单：<768px 顶栏唤起，选中即关闭 -->
+    <!-- 移动端汉堡抽屉菜单：<768px 顶栏唤起，选中即关闭；direction=ltr 左侧滑出 -->
     <el-drawer
       v-model="mobileMenuVisible"
       title="菜单"
       size="70%"
+      direction="ltr"
       class="mobile-menu-drawer"
       :append-to-body="true"
     >
@@ -68,7 +69,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Odometer, Tickets, User, Avatar, OfficeBuilding, Setting, Expand, Fold, UserFilled, Flag, Menu,
+  Odometer, Tickets, User, Avatar, OfficeBuilding, Collection, Setting, Expand, Fold, UserFilled, Flag, Menu,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -87,6 +88,7 @@ const menuItems = [
   { index: '/customers', icon: User, title: '客户管理' },
   { index: '/holders', icon: Avatar, title: '预订人管理' },
   { index: '/hotels', icon: OfficeBuilding, title: '酒店管理' },
+  { index: '/fields', icon: Collection, title: '字段管理' },
   { index: '/settings', icon: Setting, title: '系统设置' },
 ]
 
