@@ -554,7 +554,7 @@ function onBucketChange(bucket) {
   loadTrend(bucket)
 }
 
-// tooltip：该周期酒店/高尔夫分线数字（收入与利润都展示）
+// tooltip：跟随业务线选择——全部=酒店/高尔夫/合计；单一业务=只显示所选线的收入与利润
 function trendTooltipFormatter(params) {
   const row = trendRows.value[params?.[0]?.dataIndex]
   if (!row) return ''
@@ -565,17 +565,34 @@ function trendTooltipFormatter(params) {
     `<span style="font-weight:${strong ? 600 : 400};font-variant-numeric:tabular-nums">${text}</span></div>`
   const head = (text) =>
     `<div style="color:#909399;font-size:12px;margin:3px 0 1px">${text}</div>`
+  const biz = trendBiz.value
+  const saleRows = []
+  const profitRows = []
+  if (biz === 'hotel') {
+    saleRows.push(line('收入', money(row.hotel_sale), true))
+    profitRows.push(line('利润', profitY(row.hotel_profit), true))
+  } else if (biz === 'golf') {
+    saleRows.push(line('收入', money(row.golf_sale), true))
+    profitRows.push(line('利润', profitY(row.golf_profit), true))
+  } else {
+    saleRows.push(
+      line('酒店', money(row.hotel_sale)),
+      line('高尔夫', money(row.golf_sale)),
+      line('合计', money(round2(row.hotel_sale + row.golf_sale)), true),
+    )
+    profitRows.push(
+      line('酒店利润', profitY(row.hotel_profit)),
+      line('高尔夫利润', profitY(row.golf_profit)),
+      line('合计利润', profitY(round2(row.hotel_profit + row.golf_profit)), true),
+    )
+  }
   return (
-    `<div style="min-width:200px">` +
+    `<div style="min-width:190px">` +
     `<div style="font-weight:600;margin-bottom:2px;color:#303133">${row.period}</div>` +
-    head('收入') +
-    line('酒店', money(row.hotel_sale)) +
-    line('高尔夫', money(row.golf_sale)) +
-    line('合计', money(round2(row.hotel_sale + row.golf_sale)), true) +
-    head('利润') +
-    line('酒店', profitY(row.hotel_profit)) +
-    line('高尔夫', profitY(row.golf_profit)) +
-    line('合计', profitY(round2(row.hotel_profit + row.golf_profit)), true) +
+    (biz === 'all' ? head('收入') : '') +
+    saleRows.join('') +
+    (biz === 'all' ? head('利润') : '') +
+    profitRows.join('') +
     `</div>`
   )
 }
