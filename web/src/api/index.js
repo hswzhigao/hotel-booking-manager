@@ -126,4 +126,8 @@ export const statsApi = {
   //    today_sale,today_cost,today_profit,                                   // V3.3 今日双线合计
   //    channels:[{channel,order_count,sale,cost,profit,month_sale,month_profit}]} // V3.3 渠道分解
   summary: () => http.get('/stats/summary'),
+  // V6 收益趋势：?bucket=day|week|month|year&limit=N（day 默认 30、week 12、month 12、year 3，上限 90）
+  // → {items:[{period,hotel_sale,hotel_cost,golf_sale,golf_cost}]} 周期正序、仅含有数据周期，
+  //   合计（酒店+高尔夫）与利润由前端计算，无数据周期由前端补 0
+  trend: (params) => http.get('/stats/trend', { params }),
 }
