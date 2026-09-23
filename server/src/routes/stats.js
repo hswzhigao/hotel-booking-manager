@@ -75,6 +75,14 @@ router.get('/summary', async (req, res, next) => {
     }));
     r.total_profit = Math.round((r.total_sale - r.total_cost) * 100) / 100;
     r.month_profit = Math.round((r.month_sale - r.month_cost) * 100) / 100;
+    r.total_profit = Math.round((r.total_sale - r.total_cost) * 100) / 100;
+    // 合并总账（酒店+高尔夫，放在两者字段都算完之后）
+    r.all_order_count = r.booking_count + r.golf_order_count;
+    r.all_total_sale = Math.round((r.total_sale + r.golf_total_sale) * 100) / 100;
+    r.all_total_cost = Math.round((r.total_cost + r.golf_total_cost) * 100) / 100;
+    r.all_total_profit = Math.round((r.total_profit + r.golf_total_profit) * 100) / 100;
+    r.all_month_sale = Math.round((r.month_sale + r.golf_month_sale) * 100) / 100;
+    r.all_month_profit = Math.round((r.month_profit + r.golf_month_profit) * 100) / 100;
     const [recent] = await pool.query(
       `SELECT b.*, c.name customer_name, h.name hotel_name, bh.name benefit_holder_name,
         (SELECT COUNT(*) FROM booking_items bi WHERE bi.booking_id = b.id) room_count,
@@ -107,3 +115,32 @@ router.get('/summary', async (req, res, next) => {
 });
 
 module.exports = router;
+
+// 收益趋势：bucket=day|week|month|year；返回 [{period, hotel_sale, hotel_cost, golf_sale, golf_cost}]
+router.get('/trend', async (req, res, next) => {
+  try {
+    const { bucket = 'day' } = req.query;
+    const fmtMap = {
+      day: { sql: '%Y-%m-%d', limit: 30 },
+      week: { sql: '%x-W%v', limit: 12 },
+      month: { sql: '%Y-%m', limit: 12 },
+      year: { sql: '%Y', limit: 3 },
+    };
+    const cfg = fmtMap[bucket];
+    if (!cfg) return res.status(400).json({ error: 'bucket 不合法（day/week/month/year）' });
+    let limit = Math.min(90, Number(req.query.limit) || cfg.limit);
+    if (limit < 1) limit = cfg.limit;
+    const rows = await pool.query(
+      `SELECT period, SUM(hotel_sale) hotel_sale, SUM(hotel_cost) hotel_cost, SUM(golf_sale) golf_sale, SUM(golf_cost) golf_cost FROM (
+         SELECT DATE_FORMAT(order_time, ?) period, sale_total hotel_sale, cost_total hotel_cost, 0 golf_sale, 0 golf_cost
+         FROM bookings WHERE status NOT IN ('cancelled','communicating') AND order_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+         UNION ALL
+         SELECT DATE_FORMAT(order_time, ?), 0, 0, sale_price, cost_price
+         FROM golf_orders WHERE status <> 'cancelled' AND order_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+       ) u GROUP BY period ORDER BY period`,
+      [cfg.sql, limit * (bucket === 'day' ? 1 : bucket === 'week' ? 7 : bucket === 'month' ? 31 : 366),
+       cfg.sql, limit * (bucket === 'day' ? 1 : bucket === 'week' ? 7 : bucket === 'month' ? 31 : 366)]
+    );
+    res.json({ items: rows[0] });
+  } catch (e) { next(e); }
+});
