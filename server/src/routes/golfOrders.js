@@ -32,7 +32,7 @@ function scopeCovers(scope, courseName) {
 // 校验并规整高尔夫订单入参
 async function validatePayload(body) {
   const { customer_id, benefit_holder_id, course_name, play_date, tee_time, players = 1,
-          status = 'pending', teach_needed = 0, sale_price = 0, cost_price = 0,
+          status = 'pending', teach_needed = 0, sale_price = 0, cost_price = 0, fee_rate,
           channel = 'xianyu', benefit_used = 1, benefit_type_id, order_time, notes } = body || {};
   if (!customer_id) bad(400, '请选择客户');
   const pd = parseDate(play_date);
@@ -40,6 +40,13 @@ async function validatePayload(body) {
   if (!course_name || !String(course_name).trim()) bad(400, '球场名称不能为空');
   if (!STATUSES.includes(status)) bad(400, '状态不合法');
   if (!CHANNELS.includes(channel)) bad(400, '渠道不合法');
+  let fr;
+  if (fee_rate === null || fee_rate === undefined || fee_rate === '') {
+    fr = channel === 'xianyu' ? 0.016 : 0;
+  } else {
+    fr = Number(fee_rate);
+    if (isNaN(fr) || fr < 0 || fr > 0.5) bad(400, '手续费率不合法（0~50%）');
+  }
   const bu = Number(benefit_used) === 1 ? 1 : 0;
   const tn = Number(teach_needed) === 1 ? 1 : 0;
   const sp = Number(sale_price) || 0, cp = Number(cost_price) || 0;
@@ -78,7 +85,7 @@ async function validatePayload(body) {
   }
   return { customer_id: Number(customer_id), holderId, typeId, courseName: String(course_name).trim(), playDate: pd,
            teeTime: tee_time || null, players: pl, status, teachNeeded: tn, salePrice: sp, costPrice: cp,
-           channel, benefitUsed: bu, orderTime: ot, notes: notes || null };
+           channel, feeRate: fr, benefitUsed: bu, orderTime: ot, notes: notes || null };
 }
 
 const effectiveUse = (benefitUsed, status) => (Number(benefitUsed) === 1 && status !== 'cancelled') ? 1 : 0;
@@ -128,7 +135,8 @@ router.get('/', async (req, res, next) => {
     const [rows] = await pool.query(
       `SELECT g.*, c.name customer_name, bh.name benefit_holder_name, t.name benefit_type_name,
         bh.availability holder_availability,
-        (g.sale_price - g.cost_price) profit
+        ROUND(g.sale_price * g.fee_rate, 2) fee,
+        (g.sale_price - g.cost_price - ROUND(g.sale_price * g.fee_rate, 2)) profit
       FROM golf_orders g
       JOIN customers c ON c.id = g.customer_id
       LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
@@ -153,7 +161,8 @@ router.get('/:id', async (req, res, next) => {
   try {
     const [rows] = await pool.query(
       `SELECT g.*, c.name customer_name, bh.name benefit_holder_name, bh.availability holder_availability,
-        t.name benefit_type_name, (g.sale_price - g.cost_price) profit
+        t.name benefit_type_name, ROUND(g.sale_price * g.fee_rate, 2) fee,
+        (g.sale_price - g.cost_price - ROUND(g.sale_price * g.fee_rate, 2)) profit
       FROM golf_orders g
       JOIN customers c ON c.id = g.customer_id
       LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
@@ -171,8 +180,8 @@ router.post('/', async (req, res, next) => {
   try {
     const p = await validatePayload(req.body);
     await conn.beginTransaction();
-    const cols = ['customer_id', 'benefit_holder_id', 'course_name', 'play_date', 'tee_time', 'players', 'status', 'teach_needed', 'sale_price', 'cost_price', 'channel', 'benefit_used', 'benefit_type_id', 'notes'];
-    const vals = [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.channel, p.benefitUsed, p.typeId, p.notes];
+    const cols = ['customer_id', 'benefit_holder_id', 'course_name', 'play_date', 'tee_time', 'players', 'status', 'teach_needed', 'sale_price', 'cost_price', 'fee_rate', 'channel', 'benefit_used', 'benefit_type_id', 'notes'];
+    const vals = [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.feeRate, p.channel, p.benefitUsed, p.typeId, p.notes];
     if (p.orderTime) { cols.push('order_time'); vals.push(p.orderTime); }
     const [ins] = await conn.query(
       `INSERT INTO golf_orders (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, vals
@@ -200,13 +209,13 @@ router.put('/:id', async (req, res, next) => {
     await conn.beginTransaction();
     if (p.orderTime) {
       await conn.query(
-        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, channel=?, benefit_used=?, benefit_type_id=?, order_time=?, notes=? WHERE id=?`,
-        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.channel, p.benefitUsed, p.typeId, p.orderTime, p.notes, id]
+        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, fee_rate=?, channel=?, benefit_used=?, benefit_type_id=?, order_time=?, notes=? WHERE id=?`,
+        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.feeRate, p.channel, p.benefitUsed, p.typeId, p.orderTime, p.notes, id]
       );
     } else {
       await conn.query(
-        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, channel=?, benefit_used=?, benefit_type_id=?, notes=? WHERE id=?`,
-        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.channel, p.benefitUsed, p.typeId, p.notes, id]
+        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, fee_rate=?, channel=?, benefit_used=?, benefit_type_id=?, notes=? WHERE id=?`,
+        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.feeRate, p.channel, p.benefitUsed, p.typeId, p.notes, id]
       );
     }
     const oldUse = effectiveUse(old.benefit_used, old.status);

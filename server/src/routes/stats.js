@@ -17,11 +17,13 @@ router.get('/summary', async (req, res, next) => {
          ) t) room_night_count,
         (SELECT COALESCE(SUM(sale_total), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating')) total_sale,
         (SELECT COALESCE(SUM(cost_total), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating')) total_cost,
+        (SELECT COALESCE(SUM(ROUND(sale_total * fee_rate, 2)), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating')) hotel_fee_total,
+        (SELECT COALESCE(SUM(ROUND(sale_total * fee_rate, 2)), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating') AND order_time >= ?) hotel_month_fee,
         (SELECT COUNT(*) FROM customers) customer_count,
         (SELECT COUNT(*) FROM hotels) hotel_count,
         (SELECT COALESCE(SUM(sale_total), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating') AND order_time >= ?) month_sale,
         (SELECT COALESCE(SUM(cost_total), 0) FROM bookings WHERE status NOT IN ('cancelled','communicating') AND order_time >= ?) month_cost`,
-      [monthStart, monthStart]
+      [monthStart, monthStart, monthStart]
     );
     const [[g]] = await pool.query(
       `SELECT
@@ -29,15 +31,29 @@ router.get('/summary', async (req, res, next) => {
         (SELECT COALESCE(SUM(sale_price), 0) FROM golf_orders WHERE status <> 'cancelled') golf_total_sale,
         (SELECT COALESCE(SUM(cost_price), 0) FROM golf_orders WHERE status <> 'cancelled') golf_total_cost,
         (SELECT COALESCE(SUM(sale_price), 0) FROM golf_orders WHERE status <> 'cancelled' AND order_time >= ?) golf_month_sale,
-        (SELECT COALESCE(SUM(cost_price), 0) FROM golf_orders WHERE status <> 'cancelled' AND order_time >= ?) golf_month_cost`,
-      [monthStart, monthStart]
+        (SELECT COALESCE(SUM(cost_price), 0) FROM golf_orders WHERE status <> 'cancelled' AND order_time >= ?) golf_month_cost,
+        (SELECT COALESCE(SUM(ROUND(sale_price * fee_rate, 2)), 0) FROM golf_orders WHERE status <> 'cancelled') golf_fee_total,
+        (SELECT COALESCE(SUM(ROUND(sale_price * fee_rate, 2)), 0) FROM golf_orders WHERE status <> 'cancelled' AND order_time >= ?) golf_month_fee`,
+      [monthStart, monthStart, monthStart]
     );
     r.golf_order_count = g.golf_order_count;
     r.golf_total_sale = g.golf_total_sale;
     r.golf_total_cost = g.golf_total_cost;
-    r.golf_total_profit = Math.round((g.golf_total_sale - g.golf_total_cost) * 100) / 100;
+    r.golf_total_profit = Math.round((g.golf_total_sale - g.golf_total_cost - (Number(g.golf_fee_total) || 0)) * 100) / 100;
     r.golf_month_sale = g.golf_month_sale;
-    r.golf_month_profit = Math.round((g.golf_month_sale - g.golf_month_cost) * 100) / 100;
+    r.golf_month_profit = Math.round((g.golf_month_sale - g.golf_month_cost - g.golf_month_fee) * 100) / 100;
+    // V7：分账手续费/毛利/净利/利润率（纯订单口径）
+    const pct = (net, sale) => sale > 0 ? Math.round((net / sale) * 10000) / 100 : 0;
+    r.hotel_fee_total = Number(r.hotel_fee_total) || 0;
+    r.hotel_month_fee = Number(r.hotel_month_fee) || 0;
+    r.golf_fee_total = Number(g.golf_fee_total) || 0;
+    r.golf_month_fee = Number(g.golf_month_fee) || 0;
+    r.hotel_total_profit = Math.round((r.total_sale - r.total_cost - r.hotel_fee_total) * 100) / 100;
+    r.hotel_month_profit = Math.round((r.month_sale - r.month_cost - r.hotel_month_fee) * 100) / 100;
+    r.hotel_gross_profit = Math.round((r.total_sale - r.total_cost) * 100) / 100;
+    r.golf_gross_profit = Math.round((g.golf_total_sale - g.golf_total_cost) * 100) / 100;
+    r.hotel_profit_rate = pct(r.hotel_total_profit, r.total_sale);
+    r.golf_profit_rate = pct(r.golf_total_profit, r.golf_total_sale);
     // 今日收益（双线合计）
     const pad = n => String(n).padStart(2, '0');
     const todayStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} 00:00:00`;
@@ -76,17 +92,52 @@ router.get('/summary', async (req, res, next) => {
     r.total_profit = Math.round((r.total_sale - r.total_cost) * 100) / 100;
     r.month_profit = Math.round((r.month_sale - r.month_cost) * 100) / 100;
     r.total_profit = Math.round((r.total_sale - r.total_cost) * 100) / 100;
-    // 合并总账（酒店+高尔夫，放在两者字段都算完之后）
+    // V7 总账块：订单（营收/成本/手续费/毛利/净利/利润率）+ 手动记账
+    const pctAll = (net, sale) => sale > 0 ? Math.round((net / sale) * 10000) / 100 : 0;
+    r.total_profit = Math.round((r.total_sale - r.total_cost - r.hotel_fee_total) * 100) / 100;
+    r.month_profit = Math.round((r.month_sale - r.month_cost - r.hotel_month_fee) * 100) / 100;
+    const allSale = Number(r.total_sale) + Number(r.golf_total_sale);
+    const allCost = Number(r.total_cost) + Number(r.golf_total_cost);
+    const allFee = Number(r.hotel_fee_total) + Number(r.golf_fee_total);
+    const mAllSale = Number(r.month_sale) + Number(g.golf_month_sale);
+    const mAllCost = Number(r.month_cost) + Number(g.golf_month_cost);
+    const mAllFee = Number(r.hotel_month_fee) + Number(r.golf_month_fee);
+    // 手动记账（全部时间 + 本月）
+    const monthDateStart = monthStart.slice(0, 10);
+    const [[m]] = await pool.query(
+      `SELECT
+         COALESCE(SUM(CASE WHEN type='income' THEN amount ELSE 0 END),0) manual_total_income,
+         COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END),0) manual_total_expense,
+         COALESCE(SUM(CASE WHEN type='income' AND entry_date >= ? THEN amount ELSE 0 END),0) manual_month_income,
+         COALESCE(SUM(CASE WHEN type='expense' AND entry_date >= ? THEN amount ELSE 0 END),0) manual_month_expense
+       FROM manual_entries`, [monthDateStart, monthDateStart]);
+    r.manual_total_income = Number(m.manual_total_income);
+    r.manual_total_expense = Number(m.manual_total_expense);
+    r.manual_month_income = Number(m.manual_month_income);
+    r.manual_month_expense = Number(m.manual_month_expense);
+    // 合计（订单口径）
     r.all_order_count = r.booking_count + r.golf_order_count;
-    r.all_total_sale = Math.round((r.total_sale + r.golf_total_sale) * 100) / 100;
-    r.all_total_cost = Math.round((r.total_cost + r.golf_total_cost) * 100) / 100;
-    r.all_total_profit = Math.round((r.total_profit + r.golf_total_profit) * 100) / 100;
-    r.all_month_sale = Math.round((r.month_sale + r.golf_month_sale) * 100) / 100;
-    r.all_month_profit = Math.round((r.month_profit + r.golf_month_profit) * 100) / 100;
+    r.all_total_sale = Math.round(allSale * 100) / 100;
+    r.all_total_cost = Math.round(allCost * 100) / 100;
+    r.all_total_fee = Math.round(allFee * 100) / 100;
+    r.all_gross_profit = Math.round((allSale - allCost) * 100) / 100;
+    r.all_net_profit = Math.round((allSale - allCost - allFee) * 100) / 100;
+    r.all_profit_rate = pctAll(r.all_net_profit, allSale);
+    r.all_total_profit = r.all_net_profit; // 兼容旧字段
+    // 本月（订单 + 手动记账）
+    r.month_all_sale = Math.round((mAllSale + r.manual_month_income) * 100) / 100;
+    r.month_all_cost = Math.round((mAllCost + r.manual_month_expense) * 100) / 100;
+    r.month_all_fee = Math.round(mAllFee * 100) / 100;
+    r.month_all_gross = Math.round((mAllSale + r.manual_month_income - mAllCost - r.manual_month_expense) * 100) / 100;
+    r.month_all_net = Math.round((mAllSale + r.manual_month_income - mAllCost - r.manual_month_expense - mAllFee) * 100) / 100;
+    r.month_all_rate = pctAll(r.month_all_net, mAllSale + r.manual_month_income);
+    r.all_month_sale = Math.round(mAllSale * 100) / 100; // 兼容旧字段（订单口径）
+    r.all_month_profit = r.month_all_net; // 兼容旧字段
     const [recent] = await pool.query(
       `SELECT b.*, c.name customer_name, h.name hotel_name, bh.name benefit_holder_name,
         (SELECT COUNT(*) FROM booking_items bi WHERE bi.booking_id = b.id) room_count,
-        (b.sale_total - b.cost_total) profit
+        ROUND(b.sale_total * b.fee_rate, 2) fee,
+        (b.sale_total - b.cost_total - ROUND(b.sale_total * b.fee_rate, 2)) profit
       FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id
       LEFT JOIN benefit_holders bh ON bh.id = b.benefit_holder_id
       WHERE b.status NOT IN ('cancelled','communicating')
@@ -131,11 +182,12 @@ router.get('/trend', async (req, res, next) => {
     let limit = Math.min(90, Number(req.query.limit) || cfg.limit);
     if (limit < 1) limit = cfg.limit;
     const rows = await pool.query(
-      `SELECT period, SUM(hotel_sale) hotel_sale, SUM(hotel_cost) hotel_cost, SUM(golf_sale) golf_sale, SUM(golf_cost) golf_cost FROM (
-         SELECT DATE_FORMAT(order_time, ?) period, sale_total hotel_sale, cost_total hotel_cost, 0 golf_sale, 0 golf_cost
+      `SELECT period, SUM(hotel_sale) hotel_sale, SUM(hotel_cost) hotel_cost, SUM(hotel_fee) hotel_fee,
+              SUM(golf_sale) golf_sale, SUM(golf_cost) golf_cost, SUM(golf_fee) golf_fee FROM (
+         SELECT DATE_FORMAT(order_time, ?) period, sale_total hotel_sale, cost_total hotel_cost, ROUND(sale_total * fee_rate, 2) hotel_fee, 0 golf_sale, 0 golf_cost, 0 golf_fee
          FROM bookings WHERE status NOT IN ('cancelled','communicating') AND order_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
          UNION ALL
-         SELECT DATE_FORMAT(order_time, ?), 0, 0, sale_price, cost_price
+         SELECT DATE_FORMAT(order_time, ?), 0, 0, 0, sale_price, cost_price, ROUND(sale_price * fee_rate, 2)
          FROM golf_orders WHERE status <> 'cancelled' AND order_time >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
        ) u GROUP BY period ORDER BY period`,
       [cfg.sql, limit * (bucket === 'day' ? 1 : bucket === 'week' ? 7 : bucket === 'month' ? 31 : 366),

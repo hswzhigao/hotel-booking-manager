@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   status ENUM('communicating','ordered','info_confirmed','booking','booked','hotel_confirmed','awaiting_checkin','checked_in','finished','cancelled') NOT NULL DEFAULT 'communicating',
   breakfast_included TINYINT(1) NOT NULL DEFAULT 0,
   channel ENUM('xianyu','wechat','other') NOT NULL DEFAULT 'xianyu',
+  fee_rate DECIMAL(5,4) NOT NULL DEFAULT 0,
   holder_settled TINYINT(1) NOT NULL DEFAULT 0,
   benefit_count_used INT UNSIGNED NOT NULL DEFAULT 1,
   notes VARCHAR(500) DEFAULT NULL,
@@ -144,6 +145,7 @@ CREATE TABLE IF NOT EXISTS golf_orders (
   teach_needed TINYINT(1) NOT NULL DEFAULT 0,
   sale_price DECIMAL(10,2) NOT NULL DEFAULT 0,
   cost_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  fee_rate DECIMAL(5,4) NOT NULL DEFAULT 0,
   channel VARCHAR(20) NOT NULL DEFAULT 'xianyu',
   benefit_used TINYINT(1) NOT NULL DEFAULT 1,
   benefit_type_id INT UNSIGNED DEFAULT NULL,
@@ -162,4 +164,15 @@ CREATE TABLE IF NOT EXISTS room_type_rates (
   label VARCHAR(50) NOT NULL,
   price DECIMAL(10,2) NOT NULL DEFAULT 0,
   CONSTRAINT fk_rtr_rt FOREIGN KEY (room_type_id) REFERENCES room_types(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS manual_entries (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  entry_date DATE NOT NULL,
+  type ENUM('income','expense') NOT NULL,
+  business ENUM('hotel','golf','general') NOT NULL DEFAULT 'general',
+  amount DECIMAL(10,2) NOT NULL,
+  notes VARCHAR(500) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

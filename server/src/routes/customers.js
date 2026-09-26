@@ -48,7 +48,7 @@ router.get('/:id', async (req, res, next) => {
     const [bookings] = await pool.query(
       `SELECT b.*, h.name hotel_name,
         (SELECT COUNT(*) FROM booking_items bi WHERE bi.booking_id = b.id) room_count,
-        (b.sale_total - b.cost_total) profit
+        (b.sale_total - b.cost_total - ROUND(b.sale_total * b.fee_rate, 2)) profit
       FROM bookings b JOIN hotels h ON h.id = b.hotel_id
       WHERE b.customer_id = ? ORDER BY b.order_time DESC, b.id DESC`, [req.params.id]
     );
@@ -65,7 +65,7 @@ router.get('/:id', async (req, res, next) => {
     bookings.forEach(b => { b.items = itemsMap[b.id] || []; });
     const [golfOrders] = await pool.query(
       `SELECT g.*, bh.name benefit_holder_name, bh.availability holder_availability,
-        t.name benefit_type_name, (g.sale_price - g.cost_price) profit
+        t.name benefit_type_name, (g.sale_price - g.cost_price - ROUND(g.sale_price * g.fee_rate, 2)) profit
       FROM golf_orders g LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
       LEFT JOIN golf_benefit_types t ON t.id = g.benefit_type_id
       WHERE g.customer_id = ? ORDER BY g.order_time DESC, g.id DESC`, [req.params.id]
