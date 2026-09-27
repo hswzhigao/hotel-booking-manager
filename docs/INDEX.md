@@ -8,3 +8,4 @@
 | 剩余问题 | [plan/backlog.md](plan/backlog.md) | 不阻塞本次交付的问题 |
 | V2 设计 | [architecture/v2-checkin-policy.md](architecture/v2-checkin-policy.md) | 入住政策/权益人/入住指南 |
 | 图表集 | [architecture/diagrams.md](architecture/diagrams.md) | 架构图/ER图/业务流程图/权益账本规则 |
+| V9/V10 设计 | [architecture/v9-contacts-and-search.md](architecture/v9-contacts-and-search.md) | 联系方式分字段/卡片类型字典/拼音搜索/图表缩放 |
