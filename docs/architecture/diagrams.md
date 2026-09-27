@@ -66,6 +66,9 @@ erDiagram
     customers {
         int id PK
         varchar name
+        varchar search_key "拼音搜索键"
+        varchar xianyu_id "闲鱼号"
+        varchar wechat_id "微信号"
         tinyint is_hotel "酒店客户标签"
         tinyint is_golf "高尔夫客户标签"
     }
@@ -73,7 +76,10 @@ erDiagram
     benefit_holders {
         int id PK
         varchar name
-        varchar card_type "卡片类型"
+        varchar search_key "拼音搜索键"
+        varchar xianyu_id "闲鱼号"
+        varchar wechat_id "微信号"
+        varchar card_type "卡片类型(逗号串)"
         enum source_channel "xianyu/wechat/other"
         int hotel_benefit_count "酒店权益剩余"
         tinyint hotel_refresh_month "更新月1-12"
@@ -92,6 +98,7 @@ erDiagram
         tinyint benefit_used "是否用升级权益"
         int benefit_count_used "用几张券"
         tinyint breakfast_included "含双早"
+        decimal fee_rate "手续费率(闲鱼默认1.6%)"
         tinyint holder_settled "已给权益人结算"
         decimal sale_total "服务端自动算"
         decimal cost_total
@@ -118,6 +125,29 @@ erDiagram
         tinyint refresh_month
     }
 
+    option_dict {
+        int id PK
+        varchar category "checkin_info/golf_course/card_type"
+        varchar label UK
+        int sort
+    }
+
+    room_type_rates {
+        int id PK
+        int room_type_id FK
+        varchar label "平日/周末/国庆"
+        decimal price
+    }
+
+    manual_entries {
+        int id PK
+        date entry_date
+        enum type "income/expense"
+        enum business "hotel/golf/general"
+        decimal amount
+        varchar notes
+    }
+
     golf_orders {
         int id PK
         int customer_id FK "买家"
@@ -126,10 +156,12 @@ erDiagram
         varchar course_name
         enum status "pending/booked/completed/cancelled"
         tinyint teach_needed "需教定位"
-        enum channel "xianyu/wechat"
+        decimal fee_rate "手续费率"
+        enum channel "xianyu/wechat/other"
     }
 
     hotels ||--o{ room_types : "房型"
+    room_types ||--o{ room_type_rates : "价格档位·级联删"
     hotels ||--o{ bookings : "被预定"
     room_types ||--o{ booking_items : "被引用"
     customers ||--o{ bookings : "住店"
@@ -140,6 +172,7 @@ erDiagram
     customers ||--o{ golf_orders : "买球局"
     benefit_holders ||--o{ golf_orders : "出高尔夫权益"
     golf_benefit_types ||--o{ golf_orders : "消耗种类"
+    option_dict ||--o{ hotels : "需提供信息预设(值入列)"
 ```
 
 ## 3. 酒店预订业务流程（10 态状态机）
