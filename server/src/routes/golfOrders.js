@@ -1,6 +1,13 @@
 const router = require('express').Router();
 const pool = require('../db');
 const auth = require('../middleware/auth');
+const { pinyin } = require('pinyin-pro');
+function buildSearchKey(name) {
+  if (!name) return '';
+  const full = String(pinyin(name, { toneType: 'none', type: 'array' })).replace(/,/g, '');
+  const initials = String(pinyin(name, { pattern: 'first', toneType: 'none', type: 'array' })).replace(/,/g, '');
+  return `${full} ${initials}`.trim();
+}
 
 router.use(auth);
 
@@ -125,7 +132,7 @@ router.get('/', async (req, res, next) => {
       if (!parseDate(date_to)) bad(400, 'date_to 格式应为 YYYY-MM-DD');
       where.push('g.play_date <= ?'); params.push(date_to);
     }
-    if (search) { where.push('(c.name LIKE ? OR g.course_name LIKE ?)'); const like = `%${search}%`; params.push(like, like); }
+    if (search) { where.push('(c.name LIKE ? OR c.search_key LIKE ? OR g.course_name LIKE ? OR g.course_search_key LIKE ?)'); const like = `%${search}%`; params.push(like, like, like, like); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
     const [countRows] = await pool.query(
       `SELECT COUNT(*) total FROM golf_orders g JOIN customers c ON c.id = g.customer_id ${whereSql}`, params
@@ -180,8 +187,8 @@ router.post('/', async (req, res, next) => {
   try {
     const p = await validatePayload(req.body);
     await conn.beginTransaction();
-    const cols = ['customer_id', 'benefit_holder_id', 'course_name', 'play_date', 'tee_time', 'players', 'status', 'teach_needed', 'sale_price', 'cost_price', 'fee_rate', 'channel', 'benefit_used', 'benefit_type_id', 'notes'];
-    const vals = [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.feeRate, p.channel, p.benefitUsed, p.typeId, p.notes];
+    const cols = ['customer_id', 'benefit_holder_id', 'course_name', 'course_search_key', 'play_date', 'tee_time', 'players', 'status', 'teach_needed', 'sale_price', 'cost_price', 'fee_rate', 'channel', 'benefit_used', 'benefit_type_id', 'notes'];
+    const vals = [p.customer_id, p.holderId, p.courseName, buildSearchKey(p.courseName), p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.feeRate, p.channel, p.benefitUsed, p.typeId, p.notes];
     if (p.orderTime) { cols.push('order_time'); vals.push(p.orderTime); }
     const [ins] = await conn.query(
       `INSERT INTO golf_orders (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, vals
@@ -209,13 +216,13 @@ router.put('/:id', async (req, res, next) => {
     await conn.beginTransaction();
     if (p.orderTime) {
       await conn.query(
-        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, fee_rate=?, channel=?, benefit_used=?, benefit_type_id=?, order_time=?, notes=? WHERE id=?`,
-        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.feeRate, p.channel, p.benefitUsed, p.typeId, p.orderTime, p.notes, id]
+        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, course_search_key=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, fee_rate=?, channel=?, benefit_used=?, benefit_type_id=?, order_time=?, notes=? WHERE id=?`,
+        [p.customer_id, p.holderId, p.courseName, buildSearchKey(p.courseName), p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.feeRate, p.channel, p.benefitUsed, p.typeId, p.orderTime, p.notes, id]
       );
     } else {
       await conn.query(
-        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, fee_rate=?, channel=?, benefit_used=?, benefit_type_id=?, notes=? WHERE id=?`,
-        [p.customer_id, p.holderId, p.courseName, p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.feeRate, p.channel, p.benefitUsed, p.typeId, p.notes, id]
+        `UPDATE golf_orders SET customer_id=?, benefit_holder_id=?, course_name=?, course_search_key=?, play_date=?, tee_time=?, players=?, status=?, teach_needed=?, sale_price=?, cost_price=?, fee_rate=?, channel=?, benefit_used=?, benefit_type_id=?, notes=? WHERE id=?`,
+        [p.customer_id, p.holderId, p.courseName, buildSearchKey(p.courseName), p.playDate, p.teeTime, p.players, p.status, p.teachNeeded, p.salePrice, p.costPrice, p.feeRate, p.channel, p.benefitUsed, p.typeId, p.notes, id]
       );
     }
     const oldUse = effectiveUse(old.benefit_used, old.status);

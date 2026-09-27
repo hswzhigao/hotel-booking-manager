@@ -1,6 +1,13 @@
 const router = require('express').Router();
 const pool = require('../db');
 const auth = require('../middleware/auth');
+const { pinyin } = require('pinyin-pro');
+function buildSearchKey(name) {
+  if (!name) return '';
+  const full = String(pinyin(name, { toneType: 'none', type: 'array' })).replace(/,/g, '');
+  const initials = String(pinyin(name, { pattern: 'first', toneType: 'none', type: 'array' })).replace(/,/g, '');
+  return `${full} ${initials}`.trim();
+}
 
 router.use(auth);
 
@@ -9,8 +16,8 @@ router.get('/', async (req, res, next) => {
   try {
     const { search = '', page = 1, page_size = 20 } = req.query;
     const like = `%${search}%`;
-    const where = search ? 'WHERE h.name LIKE ? OR h.city LIKE ? OR h.address LIKE ?' : '';
-    const params = search ? [like, like, like] : [];
+    const where = search ? 'WHERE h.name LIKE ? OR h.search_key LIKE ? OR h.city LIKE ? OR h.address LIKE ?' : '';
+    const params = search ? [like, like, like, like] : [];
     const [countRows] = await pool.query(`SELECT COUNT(*) total FROM hotels h ${where}`, params);
     const size = Math.min(100, Number(page_size) || 20);
     const offset = (Math.max(1, Number(page) || 1) - 1) * size;
@@ -67,8 +74,8 @@ router.post('/', async (req, res, next) => {
     if (!name || !String(name).trim()) return res.status(400).json({ error: '酒店名称不能为空' });
     const p = policyFields(req.body);
     const [ins] = await pool.query(
-      'INSERT INTO hotels (name, city, address, phone, notes, checkin_presence, checkin_info_required, checkin_process, official_phone, guide_text) VALUES (?,?,?,?,?,?,?,?,?,?)',
-      [String(name).trim(), city || null, address || null, phone || null, notes || null,
+      'INSERT INTO hotels (name, search_key, city, address, phone, notes, checkin_presence, checkin_info_required, checkin_process, official_phone, guide_text) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      [String(name).trim(), buildSearchKey(String(name).trim()), city || null, address || null, phone || null, notes || null,
        p.checkin_presence, p.checkin_info_required, p.checkin_process, p.official_phone, p.guide_text]
     );
     res.json({ id: ins.insertId });
@@ -81,8 +88,8 @@ router.put('/:id', async (req, res, next) => {
     if (!name || !String(name).trim()) return res.status(400).json({ error: '酒店名称不能为空' });
     const p = policyFields(req.body);
     const [r] = await pool.query(
-      'UPDATE hotels SET name=?, city=?, address=?, phone=?, notes=?, checkin_presence=?, checkin_info_required=?, checkin_process=?, official_phone=?, guide_text=? WHERE id=?',
-      [String(name).trim(), city || null, address || null, phone || null, notes || null,
+      'UPDATE hotels SET name=?, search_key=?, city=?, address=?, phone=?, notes=?, checkin_presence=?, checkin_info_required=?, checkin_process=?, official_phone=?, guide_text=? WHERE id=?',
+      [String(name).trim(), buildSearchKey(String(name).trim()), city || null, address || null, phone || null, notes || null,
        p.checkin_presence, p.checkin_info_required, p.checkin_process, p.official_phone, p.guide_text, req.params.id]
     );
     if (r.affectedRows === 0) return res.status(404).json({ error: '酒店不存在' });

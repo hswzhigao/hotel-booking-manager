@@ -124,7 +124,7 @@ router.get('/', async (req, res, next) => {
       if (!parseDate(date_to)) bad(400, 'date_to 格式应为 YYYY-MM-DD');
       where.push('b.check_in <= ?'); params.push(date_to);
     }
-    if (search) { where.push('(c.name LIKE ? OR h.name LIKE ?)'); const like = `%${search}%`; params.push(like, like); }
+    if (search) { where.push('(c.name LIKE ? OR c.search_key LIKE ? OR h.name LIKE ? OR h.search_key LIKE ?)'); const like = `%${search}%`; params.push(like, like, like, like); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
     const [countRows] = await pool.query(
       `SELECT COUNT(*) total FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id ${whereSql}`, params
