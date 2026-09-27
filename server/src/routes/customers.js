@@ -23,7 +23,7 @@ router.get('/', async (req, res, next) => {
     const { search = '', is_hotel, is_golf, page = 1, page_size = 20 } = req.query;
     const like = `%${search}%`;
     const where = []; const params = [];
-    if (search) { where.push('(c.name LIKE ? OR c.wechat LIKE ? OR c.phone LIKE ?)'); params.push(like, like, like); }
+    if (search) { where.push('(c.name LIKE ? OR c.xianyu_id LIKE ? OR c.wechat_id LIKE ? OR c.phone LIKE ?)'); params.push(like, like, like, like); }
     if (is_hotel !== undefined && is_hotel !== '') { where.push('c.is_hotel = ?'); params.push(Number(is_hotel) === 1 ? 1 : 0); }
     if (is_golf !== undefined && is_golf !== '') { where.push('c.is_golf = ?'); params.push(Number(is_golf) === 1 ? 1 : 0); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
@@ -76,11 +76,11 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, wechat, phone, is_hotel = 1, is_golf = 0, notes } = req.body || {};
+    const { name, xianyu_id, wechat_id, phone, is_hotel = 1, is_golf = 0, notes } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: '客户姓名不能为空' });
     const [ins] = await pool.query(
-      'INSERT INTO customers (name, wechat, phone, is_hotel, is_golf, notes) VALUES (?,?,?,?,?,?)',
-      [String(name).trim(), wechat || null, phone || null,
+      'INSERT INTO customers (name, xianyu_id, wechat_id, phone, is_hotel, is_golf, notes) VALUES (?,?,?,?,?,?,?)',
+      [String(name).trim(), xianyu_id || null, wechat_id || null, phone || null,
        Number(is_hotel) === 1 ? 1 : 0, Number(is_golf) === 1 ? 1 : 0, notes || null]
     );
     res.json({ id: ins.insertId });
@@ -89,11 +89,11 @@ router.post('/', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, wechat, phone, is_hotel = 1, is_golf = 0, notes } = req.body || {};
+    const { name, xianyu_id, wechat_id, phone, is_hotel = 1, is_golf = 0, notes } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: '客户姓名不能为空' });
     const [r] = await pool.query(
-      'UPDATE customers SET name=?, wechat=?, phone=?, is_hotel=?, is_golf=?, notes=? WHERE id=?',
-      [String(name).trim(), wechat || null, phone || null,
+      'UPDATE customers SET name=?, xianyu_id=?, wechat_id=?, phone=?, is_hotel=?, is_golf=?, notes=? WHERE id=?',
+      [String(name).trim(), xianyu_id || null, wechat_id || null, phone || null,
        Number(is_hotel) === 1 ? 1 : 0, Number(is_golf) === 1 ? 1 : 0, notes || null, req.params.id]
     );
     if (r.affectedRows === 0) return res.status(404).json({ error: '客户不存在' });
