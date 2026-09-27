@@ -41,6 +41,29 @@ body,
   color: #f56c6c;
 }
 
+/* V7 手续费金额（橙色弱化，区别于净利的正绿负红） */
+.money-fee {
+  color: #e6a23c;
+}
+
+/* V7 列表内改状态：状态徽标可点击，附小箭头 */
+.status-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.status-toggle .status-caret {
+  font-size: 10px;
+  margin-left: 2px;
+  vertical-align: -1px;
+}
+
+/* 移动卡片内「改状态」下拉按钮与相邻按钮对齐 */
+.m-status-dd {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
 /* V3.2 状态徽标：finished 深绿（区别于 checked_in 的普通绿） */
 .el-tag.is-deep-green {
   --el-tag-bg-color: #d9f0d0;

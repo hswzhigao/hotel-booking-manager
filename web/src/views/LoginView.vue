@@ -28,7 +28,7 @@
           </el-button>
         </el-form-item>
       </el-form>
-      <div class="login-tip">默认账号：admin / admin123（首次登录后请在系统设置中修改密码）</div>
+      <div class="login-tip">默认账号：admin / admin123（首次登录后请在「设置」中修改密码）</div>
     </el-card>
   </div>
 </template>

@@ -116,6 +116,18 @@ export function channelText(channel) {
   return CHANNEL_MAP[channel] || channel || '-'
 }
 
+// ===== V7 手续费 =====
+/** 渠道默认手续费率（百分比展示值）：闲鱼 1.6，其他 0 */
+export function defaultFeeRatePct(channel) {
+  return channel === 'xianyu' ? 1.6 : 0
+}
+
+/** fee_rate（小数 0~0.5）→ 百分比文本（去尾零）：0.016 →「1.6%」 */
+export function feeRatePctText(rate) {
+  const pct = Number(rate || 0) * 100
+  return `${Number(pct.toFixed(2))}%`
+}
+
 export const AVAILABILITY_MAP = {
   any: { label: '不限', type: 'info' },
   weekend_only: { label: '仅周末', type: 'warning' },

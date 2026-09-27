@@ -61,11 +61,12 @@ export const customersApi = {
 export const bookingsApi = {
   // ?customer_id=&hotel_id=&status=&date_from=&date_to=&search=&page=&page_size=
   // PUT 需全量提交（含所有字段）；400 文案（如「该预订人剩余酒店权益不足」「权益张数应为 1-99」）由拦截器透出
+  // V7：fee_rate 0~0.5（不传默认 渠道=xianyu→0.016 其他→0），响应含 fee（手续费金额），profit 为净利
   list: (params) => http.get('/bookings', { params }),
   detail: (id) => http.get(`/bookings/${id}`),
   // {customer_id!,hotel_id!,check_in!,check_out!,items:[{room_type_id!,price!}],
   //  cost_total?,order_time?,benefit_holder_id?,benefit_used?,benefit_count_used?(1-99),
-  //  status?(10 态),channel?(xianyu/wechat/other),breakfast_included?,holder_settled?,notes?} → {id}
+  //  status?(10 态),channel?(xianyu/wechat/other),fee_rate?(0~0.5),breakfast_included?,holder_settled?,notes?} → {id}
   create: (data) => http.post('/bookings', data),
   update: (id, data) => http.put(`/bookings/${id}`, data),
   remove: (id) => http.delete(`/bookings/${id}`),
@@ -102,21 +103,34 @@ export const golfBenefitTypesApi = {
   remove: (id) => http.delete(`/golf-benefit-types/${id}`),
 }
 
-// ===== 高尔夫订单 golf-orders（V3 新增，V3.1/V3.3 扩展，全组需登录）=====
+// ===== 高尔夫订单 golf-orders（V3 新增，V3.1/V3.3/V7 扩展，全组需登录）=====
 export const golfOrdersApi = {
   // ?customer_id=&benefit_holder_id=&status=&date_from=&date_to=&search=&page=&page_size=
   // → {total, items:[{...,customer_name,benefit_holder_name,benefit_type_name,
-  //    holder_availability,profit}]}
+  //    holder_availability,fee_rate,fee,profit(净利)}]}
+  // V7：fee_rate 0~0.5（不传默认 渠道=xianyu→0.016 其他→0）
   list: (params) => http.get('/golf-orders', { params }),
   detail: (id) => http.get(`/golf-orders/${id}`),
   // {customer_id!,course_name!,play_date!,tee_time?,players?,status?,teach_needed?,
-  //  sale_price?,cost_price?,channel?(xianyu/wechat/other),benefit_used?,benefit_type_id?(benefit_used=1 必填),
-  //  order_time?,notes?,benefit_holder_id?} → {id}
+  //  sale_price?,cost_price?,channel?(xianyu/wechat/other),fee_rate?(0~0.5),
+  //  benefit_used?,benefit_type_id?(benefit_used=1 必填),order_time?,notes?,benefit_holder_id?} → {id}
   create: (data) => http.post('/golf-orders', data),
   update: (id, data) => http.put(`/golf-orders/${id}`, data),
   remove: (id) => http.delete(`/golf-orders/${id}`),
   // 历史球场名去重列表（供球场输入下拉）
   courses: () => http.get('/golf-orders/courses'),
+}
+
+// ===== 手动记账 manual-entries（V7 引入，全组需登录）=====
+export const manualEntriesApi = {
+  // ?month=YYYY-MM&type=income|expense&business=hotel|golf|general&page=&page_size=
+  // → {total, items:[{id,entry_date,type,business,amount,notes,created_at,updated_at}], summary:{income,expense}}（小计同筛选口径）
+  list: (params) => http.get('/manual-entries', { params }),
+  // {entry_date!(YYYY-MM-DD),type!(income|expense),business?(hotel|golf|general，默认 general),
+  //  amount!(正数),notes?} → {id}
+  create: (data) => http.post('/manual-entries', data),
+  update: (id, data) => http.put(`/manual-entries/${id}`, data),
+  remove: (id) => http.delete(`/manual-entries/${id}`),
 }
 
 // ===== 统计 stats =====
@@ -125,9 +139,13 @@ export const statsApi = {
   //    month_sale,month_profit,golf_*,recent_bookings,
   //    today_sale,today_cost,today_profit,                                   // V3.3 今日双线合计
   //    channels:[{channel,order_count,sale,cost,profit,month_sale,month_profit}]} // V3.3 渠道分解
+  // V7 扩展：bookings/golf_orders 响应含 fee_rate/fee，profit 统一为净利（sale−cost−fee）；
+  //   summary 新增 all_total_fee/all_gross_profit/all_net_profit/all_profit_rate、
+  //   month_all_sale/cost/fee/gross/net/rate（本月含手动记账）、manual_total_/month_income/expense、
+  //   hotel_fee_total/hotel_gross_profit/hotel_total_profit(净)/hotel_profit_rate（golf 同构）
   summary: () => http.get('/stats/summary'),
   // V6 收益趋势：?bucket=day|week|month|year&limit=N（day 默认 30、week 12、month 12、year 3，上限 90）
-  // → {items:[{period,hotel_sale,hotel_cost,golf_sale,golf_cost}]} 周期正序、仅含有数据周期，
-  //   合计（酒店+高尔夫）与利润由前端计算，无数据周期由前端补 0
+  // → {items:[{period,hotel_sale,hotel_cost,hotel_fee,golf_sale,golf_cost,golf_fee}]} 周期正序、仅含有数据周期，
+  //   V7 利润=净利口径，由前端按 sale−cost−fee 计算，无数据周期由前端补 0
   trend: (params) => http.get('/stats/trend', { params }),
 }

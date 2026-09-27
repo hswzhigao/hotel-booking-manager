@@ -98,7 +98,10 @@
         <el-table-column label="成本" width="95" align="right">
           <template #default="{ row }"><span class="money">{{ money(row.cost_price) }}</span></template>
         </el-table-column>
-        <el-table-column label="利润" width="90" align="right">
+        <el-table-column label="手续费" width="85" align="right">
+          <template #default="{ row }"><span class="money money-fee">{{ money(row.fee) }}</span></template>
+        </el-table-column>
+        <el-table-column label="净利" width="90" align="right">
           <template #default="{ row }">
             <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
           </template>
@@ -109,9 +112,24 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="80">
+        <el-table-column label="状态" width="105">
           <template #default="{ row }">
-            <el-tag :type="golfStatusMeta(row.status).type" size="small">{{ golfStatusMeta(row.status).label }}</el-tag>
+            <!-- V7 内联改状态：点徽标展开全部状态，选中即保存（权益流转由后端 PUT 处理） -->
+            <el-dropdown trigger="click" @command="(s) => onInlineStatusChange(row, s)">
+              <el-tag :type="golfStatusMeta(row.status).type" size="small" class="status-toggle">
+                {{ golfStatusMeta(row.status).label }}<el-icon class="status-caret"><ArrowDown /></el-icon>
+              </el-tag>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-for="(m, k) in GOLF_STATUS_MAP"
+                    :key="k"
+                    :command="k"
+                    :disabled="k === row.status"
+                  >{{ m.label }}</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
         <el-table-column label="渠道" width="70" align="center">
@@ -142,9 +160,17 @@
             <span class="m-value">{{ dateText(row.play_date) }} · {{ row.players }}人</span>
           </div>
           <div class="m-line">
-            <span class="m-label">卖价/利润</span>
+            <span class="m-label">卖价/成本</span>
             <span class="m-value">
               <span class="money">{{ money(row.sale_price) }}</span>
+              /
+              <span class="money">{{ money(row.cost_price) }}</span>
+            </span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">手续费/净利</span>
+            <span class="m-value">
+              <span class="money money-fee">{{ money(row.fee) }}</span>
               /
               <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
             </span>
@@ -161,6 +187,20 @@
           <div class="m-actions">
             <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
             <el-button text type="danger" size="small" @click="onDelete(row)">删除</el-button>
+            <!-- 移动端改状态：ActionSheet 式下拉 -->
+            <el-dropdown trigger="click" class="m-status-dd" @command="(s) => onInlineStatusChange(row, s)">
+              <el-button text type="primary" size="small">改状态</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-for="(m, k) in GOLF_STATUS_MAP"
+                    :key="k"
+                    :command="k"
+                    :disabled="k === row.status"
+                  >{{ m.label }}</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
       </div>
@@ -295,14 +335,31 @@
         </el-form-item>
         <el-form-item label="成本">
           <el-input-number v-model="form.cost_price" :min="0" :precision="2" :step="50" :controls="false" style="width: 100%" />
-          <div v-if="Number(form.sale_price) > 0 || Number(form.cost_price) > 0" class="field-tip">
-            预计利润：{{ profitText(Number(form.sale_price || 0) - Number(form.cost_price || 0)) }}
-          </div>
+        </el-form-item>
+        <!-- V7 手续费率：默认 渠道=闲鱼→1.6% 其他→0；切渠道时未手动改过则跟随默认 -->
+        <el-form-item label="手续费率">
+          <el-input-number
+            v-model="form.fee_rate_pct"
+            :min="0"
+            :max="50"
+            :precision="1"
+            :step="0.1"
+            :controls="false"
+            placeholder="0-50"
+            style="width: 120px"
+            @change="onFeeRateManualChange"
+          />
+          <span class="fee-unit">%</span>
+          <span class="nights-tip">
+            手续费：<b class="money">{{ money(formFeeAmount) }}</b>（卖价 × 费率）
+          </span>
+          <div class="field-tip">预计净利：{{ profitText(formNetProfit) }}（卖价 − 成本 − 手续费）</div>
         </el-form-item>
         <el-form-item label="渠道">
-          <el-select v-model="form.channel" style="width: 140px">
+          <el-select v-model="form.channel" style="width: 140px" @change="onChannelChange">
             <el-option v-for="(m, k) in CHANNEL_MAP" :key="k" :label="m" :value="k" />
           </el-select>
+          <div class="field-tip">闲鱼渠道手续费率默认 1.6%，其他渠道默认 0%</div>
         </el-form-item>
         <el-form-item label="下单时间" prop="order_time">
           <el-date-picker
@@ -333,15 +390,16 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { golfOrdersApi, customersApi, benefitHoldersApi , optionDictApi} from '../api'
 import {
   money, profitText, profitClass, dateText, datetimeText,
   toDatetimeString, parseDatetime, isWeekend,
   golfStatusMeta, GOLF_STATUS_MAP, channelText, CHANNEL_MAP, availabilityMeta,
+  defaultFeeRatePct,
 } from '../utils/format'
 
-// 球场来源：字段管理-球场字典（golf_course）∪ 历史订单球场（golf-orders/courses）
+// 球场来源：基础配置-球场字典（golf_course）∪ 历史订单球场（golf-orders/courses）
 const dictCourses = ref([])
 
 // ===== 下拉选项 =====
@@ -454,12 +512,40 @@ const emptyForm = () => ({
   sale_price: null,
   cost_price: null,
   channel: 'xianyu',
+  fee_rate_pct: defaultFeeRatePct('xianyu'), // V7：百分比展示值（1.6 = 1.6%）
   order_time: new Date(),
   status: 'pending',
   notes: '',
 })
 
 const form = reactive(emptyForm())
+
+// V7 手续费率默认逻辑：切换渠道时若用户未手动改过，则跟随默认（闲鱼 1.6 / 其他 0）
+const feeRateTouched = ref(false)
+
+function onFeeRateManualChange() {
+  feeRateTouched.value = true
+}
+
+function onChannelChange() {
+  if (!feeRateTouched.value) {
+    form.fee_rate_pct = defaultFeeRatePct(form.channel)
+  }
+}
+
+// 手续费金额（表单实时估算）与预计净利
+const formFeeAmount = computed(() =>
+  Math.round(Number(form.sale_price || 0) * (Number(form.fee_rate_pct || 0) / 100) * 100) / 100,
+)
+const formNetProfit = computed(() =>
+  Number(form.sale_price || 0) - Number(form.cost_price || 0) - formFeeAmount.value,
+)
+
+// fee_rate 载荷值：百分比 → 小数（0~0.5）
+function feeRatePayload() {
+  const pct = Number(form.fee_rate_pct || 0)
+  return Math.round(Math.min(Math.max(pct, 0), 50) * 100) / 10000
+}
 
 const formRules = {
   customer_id: [{ required: true, message: '请选择客户', trigger: 'change' }],
@@ -506,6 +592,7 @@ const availabilityAlert = computed(() => {
 
 function openCreate() {
   Object.assign(form, emptyForm())
+  feeRateTouched.value = false
   formVisible.value = true
 }
 
@@ -526,13 +613,54 @@ async function openEdit(row) {
       sale_price: Number(d.sale_price || 0),
       cost_price: Number(d.cost_price || 0),
       channel: d.channel || 'xianyu',
+      fee_rate_pct: Math.round(Number(d.fee_rate || 0) * 10000) / 100,
       order_time: parseDatetime(d.order_time),
       status: d.status || 'pending',
       notes: d.notes || '',
     })
+    feeRateTouched.value = false
     formVisible.value = true
   } catch (e) {
     // 错误提示已由拦截器统一处理
+  }
+}
+
+// 详情 → 全量 PUT 载荷（后端 PUT 需提交所有字段；fee_rate 不传会被后端按渠道默认重置，故必须带上）
+function payloadFromDetail(d, override = {}) {
+  return {
+    customer_id: d.customer_id,
+    benefit_holder_id: d.benefit_holder_id ?? null,
+    benefit_type_id: d.benefit_type_id ?? null,
+    course_name: String(d.course_name || '').trim(),
+    play_date: dateText(d.play_date),
+    tee_time: d.tee_time || '',
+    players: Number(d.players || 1),
+    status: d.status,
+    teach_needed: d.teach_needed ? 1 : 0,
+    sale_price: Number(d.sale_price || 0),
+    cost_price: Number(d.cost_price || 0),
+    channel: d.channel || 'xianyu',
+    fee_rate: Number(d.fee_rate || 0),
+    benefit_used: d.benefit_used ? 1 : 0,
+    order_time: d.order_time ? toDatetimeString(d.order_time) : '',
+    notes: d.notes || '',
+    ...override,
+  }
+}
+
+// V7 列表内改状态：拉详情 → 替换 status → 全量 PUT（权益流转由后端处理）
+// 乐观更新行内状态，失败回滚（错误文案由拦截器 toast）；成功后重拉列表核对
+async function onInlineStatusChange(row, status) {
+  if (status === row.status) return
+  const prev = row.status
+  row.status = status // 乐观更新
+  try {
+    const d = await golfOrdersApi.detail(row.id)
+    await golfOrdersApi.update(row.id, payloadFromDetail(d, { status }))
+    ElMessage.success(`状态已改为「${golfStatusMeta(status).label}」`)
+    await loadList() // 重拉核对（权益流转由后端处理，行内衍生字段以服务端为准）
+  } catch (e) {
+    row.status = prev // 回滚
   }
 }
 
@@ -562,6 +690,7 @@ async function onSave() {
     sale_price: Number(form.sale_price || 0),
     cost_price: Number(form.cost_price || 0),
     channel: form.channel,
+    fee_rate: feeRatePayload(),
     benefit_used: form.benefit_used ? 1 : 0,
     order_time: toDatetimeString(form.order_time),
     notes: form.notes || '',
@@ -631,6 +760,18 @@ onMounted(() => {
 
 .danger-tip {
   color: #f56c6c;
+}
+
+.fee-unit {
+  margin-left: 6px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.nights-tip {
+  margin-left: 10px;
+  font-size: 12px;
+  color: #909399;
 }
 
 .holder-option {

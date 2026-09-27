@@ -1,11 +1,27 @@
 <template>
   <div class="page-card dashboard-page">
-    <!-- ===== V6 1. 总账卡组：酒店+高尔夫合并（all_* / today_*） ===== -->
+    <!-- ===== V7 1. 总账卡组：总营收/总成本/手续费/毛利润/净利润/利润率（all_*） ===== -->
+    <div class="section-label">总账</div>
     <div class="ledger-grid" v-loading="summaryLoading">
       <el-card v-for="card in ledgerCards" :key="card.label" class="stat-card" shadow="hover">
         <div class="stat-label">{{ card.label }}</div>
         <div class="stat-value big" :class="card.cls || ''">{{ card.value }}</div>
         <div v-if="card.sub" class="stat-sub">{{ card.sub }}</div>
+      </el-card>
+    </div>
+
+    <!-- ===== V7 1b. 本月卡组（含手动记账）+ 今日卡 ===== -->
+    <div class="section-label">本月<span class="section-tag">含手动记账</span></div>
+    <div class="ledger-grid" v-loading="summaryLoading">
+      <el-card v-for="card in monthCards" :key="card.label" class="stat-card" shadow="hover">
+        <div class="stat-label">{{ card.label }}</div>
+        <div class="stat-value big" :class="card.cls || ''">{{ card.value }}</div>
+        <div v-if="card.sub" class="stat-sub">{{ card.sub }}</div>
+      </el-card>
+      <el-card class="stat-card today-card" shadow="hover">
+        <div class="stat-label">今日收益</div>
+        <div class="stat-value big" :class="profitClass(summary.today_profit)">{{ profitText(summary.today_profit) }}</div>
+        <div class="stat-sub">卖价 {{ money(summary.today_sale) }} / 成本 {{ money(summary.today_cost) }}</div>
       </el-card>
     </div>
 
@@ -29,19 +45,27 @@
               <div class="stat-value">{{ money(summary.total_cost) }}</div>
             </div>
             <div class="biz-item">
-              <div class="stat-label">利润</div>
-              <div class="stat-value" :class="profitClass(summary.total_profit)">
-                {{ profitText(summary.total_profit) }}
+              <div class="stat-label">手续费</div>
+              <div class="stat-value fee-color">{{ money(summary.hotel_fee_total) }}</div>
+            </div>
+            <div class="biz-item">
+              <div class="stat-label">净利</div>
+              <div class="stat-value" :class="profitClass(summary.hotel_total_profit)">
+                {{ profitText(summary.hotel_total_profit) }}
               </div>
+            </div>
+            <div class="biz-item">
+              <div class="stat-label">利润率</div>
+              <div class="stat-value">{{ summary.hotel_profit_rate ?? '-' }}%</div>
             </div>
             <div class="biz-item">
               <div class="stat-label">本月收入</div>
               <div class="stat-value">{{ money(summary.month_sale) }}</div>
             </div>
             <div class="biz-item">
-              <div class="stat-label">本月利润</div>
-              <div class="stat-value" :class="profitClass(summary.month_profit)">
-                {{ profitText(summary.month_profit) }}
+              <div class="stat-label">本月净利</div>
+              <div class="stat-value" :class="profitClass(summary.hotel_month_profit)">
+                {{ profitText(summary.hotel_month_profit) }}
               </div>
             </div>
           </div>
@@ -65,17 +89,25 @@
               <div class="stat-value">{{ money(summary.golf_total_cost) }}</div>
             </div>
             <div class="biz-item">
-              <div class="stat-label">利润</div>
+              <div class="stat-label">手续费</div>
+              <div class="stat-value fee-color">{{ money(summary.golf_fee_total) }}</div>
+            </div>
+            <div class="biz-item">
+              <div class="stat-label">净利</div>
               <div class="stat-value" :class="profitClass(summary.golf_total_profit)">
                 {{ profitText(summary.golf_total_profit) }}
               </div>
+            </div>
+            <div class="biz-item">
+              <div class="stat-label">利润率</div>
+              <div class="stat-value">{{ summary.golf_profit_rate ?? '-' }}%</div>
             </div>
             <div class="biz-item">
               <div class="stat-label">本月收入</div>
               <div class="stat-value">{{ money(summary.golf_month_sale) }}</div>
             </div>
             <div class="biz-item">
-              <div class="stat-label">本月利润</div>
+              <div class="stat-label">本月净利</div>
               <div class="stat-value" :class="profitClass(summary.golf_month_profit)">
                 {{ profitText(summary.golf_month_profit) }}
               </div>
@@ -103,13 +135,13 @@
           <el-table-column label="总收入" align="right">
             <template #default="{ row }">¥{{ Number(row.sale).toFixed(2) }}</template>
           </el-table-column>
-          <el-table-column label="总利润" align="right">
+          <el-table-column label="总毛利" align="right">
             <template #default="{ row }"><span :class="profitClass(row.profit)">+¥{{ Number(row.profit).toFixed(2) }}</span></template>
           </el-table-column>
           <el-table-column label="本月收入" align="right">
             <template #default="{ row }">¥{{ Number(row.month_sale).toFixed(2) }}</template>
           </el-table-column>
-          <el-table-column label="本月利润" align="right">
+          <el-table-column label="本月毛利" align="right">
             <template #default="{ row }"><span :class="profitClass(row.month_profit)">+¥{{ Number(row.month_profit).toFixed(2) }}</span></template>
           </el-table-column>
         </el-table>
@@ -146,7 +178,7 @@
         </el-radio-group>
         <el-radio-group v-model="trendMetric" size="small">
           <el-radio-button value="sale">收入</el-radio-button>
-          <el-radio-button value="profit">利润</el-radio-button>
+          <el-radio-button value="profit">净利</el-radio-button>
         </el-radio-group>
       </div>
       <div v-loading="trendLoading" class="trend-wrap">
@@ -186,7 +218,10 @@
               <el-table-column label="卖价" width="105" align="right">
                 <template #default="{ row }"><span class="money">{{ money(row.sale_total) }}</span></template>
               </el-table-column>
-              <el-table-column label="利润" width="100" align="right">
+              <el-table-column label="手续费" width="90" align="right">
+                <template #default="{ row }"><span class="money fee-color">{{ money(row.fee) }}</span></template>
+              </el-table-column>
+              <el-table-column label="净利" width="100" align="right">
                 <template #default="{ row }">
                   <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
                 </template>
@@ -214,6 +249,8 @@
                 <span class="m-label">金额</span>
                 <span class="m-value">
                   <span class="money">{{ money(row.sale_total) }}</span>
+                  /
+                  <span class="money fee-color">{{ money(row.fee) }}</span>
                   /
                   <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
                 </span>
@@ -255,7 +292,10 @@
               <el-table-column label="卖价" width="95" align="right">
                 <template #default="{ row }"><span class="money">{{ money(row.sale_price) }}</span></template>
               </el-table-column>
-              <el-table-column label="利润" width="90" align="right">
+              <el-table-column label="手续费" width="85" align="right">
+                <template #default="{ row }"><span class="money fee-color">{{ money(row.fee) }}</span></template>
+              </el-table-column>
+              <el-table-column label="净利" width="90" align="right">
                 <template #default="{ row }">
                   <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
                 </template>
@@ -283,6 +323,8 @@
                 <span class="m-label">金额</span>
                 <span class="m-value">
                   <span class="money">{{ money(row.sale_price) }}</span>
+                  /
+                  <span class="money fee-color">{{ money(row.fee) }}</span>
                   /
                   <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
                 </span>
@@ -317,7 +359,11 @@
           <el-descriptions-item label="成本合计">
             <span class="money">{{ money(hotelDetail.cost_total) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="利润">
+          <el-descriptions-item label="手续费">
+            <span class="money fee-color">{{ money(hotelDetail.fee) }}</span>
+            <span class="flow-step">（费率 {{ feeRatePctText(hotelDetail.fee_rate) }}）</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="净利">
             <span class="money" :class="profitClass(hotelDetail.profit)">{{ profitText(hotelDetail.profit) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="下单时间">{{ datetimeText(hotelDetail.order_time) }}</el-descriptions-item>
@@ -380,7 +426,11 @@
         <el-descriptions-item label="成本">
           <span class="money">{{ money(golfDetail.cost_price) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="利润">
+        <el-descriptions-item label="手续费">
+          <span class="money fee-color">{{ money(golfDetail.fee) }}</span>
+          <span class="flow-step">（费率 {{ feeRatePctText(golfDetail.fee_rate) }}）</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="净利">
           <span class="money" :class="profitClass(golfDetail.profit)">{{ profitText(golfDetail.profit) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="教定位">{{ golfDetail.teach_needed ? '需要教定位' : '不需要' }}</el-descriptions-item>
@@ -404,6 +454,7 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { bookingsApi, golfOrdersApi, statsApi } from '../api'
 import {
   money, profitText, profitClass, datetimeText, statusMeta, statusStep, golfStatusMeta, channelText,
+  feeRatePctText,
 } from '../utils/format'
 
 echarts.use([BarChart, LineChart, DataZoomComponent, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
@@ -425,31 +476,45 @@ const summary = ref({
 
 const recentBookings = computed(() => summary.value.recent_bookings || [])
 
-// 总账卡组：总收益/总成本/总利润/今日收益/本月收益（大数字，利润正绿负红）
+// 利润率显示：后端两位小数数值；兜底 '-'（0 是合法值）
+function rateText(rate) {
+  return rate === null || rate === undefined || rate === '' ? '-' : `${rate}%`
+}
+
+// V7 总账卡组：总营收/总成本/手续费/毛利润/净利润/利润率（all_*，订单口径）
 const ledgerCards = computed(() => [
   {
-    label: '总收益',
+    label: '总营收',
     value: money(summary.value.all_total_sale),
     sub: `${summary.value.all_order_count || 0} 单（酒店+高尔夫）`,
   },
   { label: '总成本', value: money(summary.value.all_total_cost) },
+  { label: '手续费', value: money(summary.value.all_total_fee) },
+  { label: '毛利润', value: profitText(summary.value.all_gross_profit) },
   {
-    label: '总利润',
-    value: profitText(summary.value.all_total_profit),
-    sub: `收入 ${money(summary.value.all_total_sale)}`,
-    cls: profitClass(summary.value.all_total_profit),
+    label: '净利润',
+    value: profitText(summary.value.all_net_profit),
+    sub: `毛利 ${money(summary.value.all_gross_profit)} − 手续费 ${money(summary.value.all_total_fee)}`,
+    cls: profitClass(summary.value.all_net_profit),
+  },
+  { label: '利润率', value: rateText(summary.value.all_profit_rate), sub: '净利 / 营收' },
+])
+
+// V7 本月卡组（month_all_*，含手动记账）；副行注明口径，手动月收支单独小字
+const monthCards = computed(() => [
+  { label: '本月营收', value: money(summary.value.month_all_sale), sub: '含手动记账' },
+  { label: '本月成本', value: money(summary.value.month_all_cost), sub: '含手动记账' },
+  { label: '手续费', value: money(summary.value.month_all_fee) },
+  { label: '本月毛利', value: profitText(summary.value.month_all_gross) },
+  {
+    label: '本月净利',
+    value: profitText(summary.value.month_all_net),
+    cls: profitClass(summary.value.month_all_net),
   },
   {
-    label: '今日收益',
-    value: profitText(summary.value.today_profit),
-    sub: `卖价 ${money(summary.value.today_sale)} / 成本 ${money(summary.value.today_cost)}`,
-    cls: profitClass(summary.value.today_profit),
-  },
-  {
-    label: '本月收益',
-    value: profitText(summary.value.all_month_profit),
-    sub: `收入 ${money(summary.value.all_month_sale)}`,
-    cls: profitClass(summary.value.all_month_profit),
+    label: '利润率',
+    value: rateText(summary.value.month_all_rate),
+    sub: `手动：收入 ${money(summary.value.manual_month_income)} / 支出 ${money(summary.value.manual_month_expense)}`,
   },
 ])
 
@@ -515,6 +580,7 @@ function genLabels(bucket, limit) {
 }
 
 // 补 0 + 合并窗口外仍有数据的周期（后端按 lookback 窗口过滤，可能含未来单）
+// V7：利润=净利 = sale − cost − fee（trend items 已含 hotel_fee/golf_fee）
 const trendRows = computed(() => {
   const bucket = trendBucket.value
   const items = trendCache.value[bucket] || []
@@ -525,14 +591,16 @@ const trendRows = computed(() => {
     const it = map.get(period) || {}
     const hotelSale = Number(it.hotel_sale || 0)
     const hotelCost = Number(it.hotel_cost || 0)
+    const hotelFee = Number(it.hotel_fee || 0)
     const golfSale = Number(it.golf_sale || 0)
     const golfCost = Number(it.golf_cost || 0)
+    const golfFee = Number(it.golf_fee || 0)
     return {
       period,
       hotel_sale: round2(hotelSale),
-      hotel_profit: round2(hotelSale - hotelCost),
+      hotel_profit: round2(hotelSale - hotelCost - hotelFee),
       golf_sale: round2(golfSale),
-      golf_profit: round2(golfSale - golfCost),
+      golf_profit: round2(golfSale - golfCost - golfFee),
     }
   })
 })
@@ -570,10 +638,10 @@ function trendTooltipFormatter(params) {
   const profitRows = []
   if (biz === 'hotel') {
     saleRows.push(line('收入', money(row.hotel_sale), true))
-    profitRows.push(line('利润', profitY(row.hotel_profit), true))
+    profitRows.push(line('净利', profitY(row.hotel_profit), true))
   } else if (biz === 'golf') {
     saleRows.push(line('收入', money(row.golf_sale), true))
-    profitRows.push(line('利润', profitY(row.golf_profit), true))
+    profitRows.push(line('净利', profitY(row.golf_profit), true))
   } else {
     saleRows.push(
       line('酒店', money(row.hotel_sale)),
@@ -581,9 +649,9 @@ function trendTooltipFormatter(params) {
       line('合计', money(round2(row.hotel_sale + row.golf_sale)), true),
     )
     profitRows.push(
-      line('酒店利润', profitY(row.hotel_profit)),
-      line('高尔夫利润', profitY(row.golf_profit)),
-      line('合计利润', profitY(round2(row.hotel_profit + row.golf_profit)), true),
+      line('酒店净利', profitY(row.hotel_profit)),
+      line('高尔夫净利', profitY(row.golf_profit)),
+      line('合计净利', profitY(round2(row.hotel_profit + row.golf_profit)), true),
     )
   }
   return (
@@ -591,7 +659,7 @@ function trendTooltipFormatter(params) {
     `<div style="font-weight:600;margin-bottom:2px;color:#303133">${row.period}</div>` +
     (biz === 'all' ? head('收入') : '') +
     saleRows.join('') +
-    (biz === 'all' ? head('利润') : '') +
+    (biz === 'all' ? head('净利') : '') +
     profitRows.join('') +
     `</div>`
   )
@@ -769,11 +837,33 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* ===== 1. 总账卡组：桌面 5 列，平板 3 列，手机 2 列 ===== */
+/* ===== 1. 卡组：分区标题 + 自适应列（6~7 卡自动铺满，桌面 6 列，窄屏换行） ===== */
+.section-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin: 2px 0 8px;
+}
+
+.section-label:first-child {
+  margin-top: 0;
+}
+
+.section-tag {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #909399;
+}
+
 .ledger-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
+}
+
+.ledger-grid + .section-label {
+  margin-top: 16px;
 }
 
 .stat-card {
@@ -836,7 +926,7 @@ onBeforeUnmount(() => {
 
 .biz-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   gap: 8px;
   text-align: center;
 }
@@ -848,6 +938,11 @@ onBeforeUnmount(() => {
 /* ===== 3. 收益趋势 ===== */
 .trend-card {
   margin-top: 0;
+}
+
+/* 手续费金额弱化色（与列表 money-fee 一致） */
+.fee-color {
+  color: #e6a23c;
 }
 
 .card-head {
@@ -916,7 +1011,7 @@ onBeforeUnmount(() => {
   }
 
   .biz-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .m-card {

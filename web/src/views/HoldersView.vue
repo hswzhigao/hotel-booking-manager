@@ -601,7 +601,7 @@ async function onDelete(row) {
   }
 }
 
-// ===== 权益种类字典（管理入口已挪至「字段管理」页，此处仅保留下拉数据加载） =====
+// ===== 权益种类字典（管理入口已挪至「基础配置」页，此处仅保留下拉数据加载） =====
 const typesLoading = ref(false)
 const benefitTypes = ref([])
 

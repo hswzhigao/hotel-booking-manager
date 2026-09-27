@@ -29,8 +29,8 @@
           <el-icon class="mobile-menu-btn mobile-only" @click="mobileMenuVisible = true">
             <Menu />
           </el-icon>
-          <span class="page-title desktop-only">{{ route.meta.title || '' }}</span>
-          <span class="mobile-brand mobile-only">酒店预订管理</span>
+          <span class="page-title desktop-only">{{ pageTitle }}</span>
+          <span class="mobile-page-title mobile-only">{{ pageTitle }}</span>
         </div>
         <div class="header-right">
           <el-icon class="desktop-only"><UserFilled /></el-icon>
@@ -69,7 +69,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Odometer, Tickets, User, Avatar, OfficeBuilding, Collection, Setting, Expand, Fold, UserFilled, Flag, Menu,
+  Odometer, Tickets, User, Avatar, OfficeBuilding, Collection, Setting, Expand, Fold, UserFilled, Flag, Menu, Notebook,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -80,16 +80,22 @@ const auth = useAuthStore()
 const isCollapsed = ref(false)
 const activeMenu = computed(() => route.path)
 
+// V7：顶栏标题跟随当前路由（桌面/移动同源）
+const pageTitle = computed(() => route.meta.title || '仪表盘')
+
 // 菜单项统一数组：侧边栏与移动端抽屉共用，避免两份菜单漂移
+// V7 更名：预定管理→酒店订单、高尔夫管理→高尔夫订单、客户管理→客户、酒店管理→酒店、
+//         预订人管理→预订人、字段管理→基础配置、系统设置→设置；新增「记账本」（/ledger）
 const menuItems = [
   { index: '/', icon: Odometer, title: '仪表盘' },
-  { index: '/bookings', icon: Tickets, title: '预定管理' },
-  { index: '/golf', icon: Flag, title: '高尔夫管理' },
-  { index: '/customers', icon: User, title: '客户管理' },
-  { index: '/holders', icon: Avatar, title: '预订人管理' },
-  { index: '/hotels', icon: OfficeBuilding, title: '酒店管理' },
-  { index: '/fields', icon: Collection, title: '字段管理' },
-  { index: '/settings', icon: Setting, title: '系统设置' },
+  { index: '/bookings', icon: Tickets, title: '酒店订单' },
+  { index: '/golf', icon: Flag, title: '高尔夫订单' },
+  { index: '/customers', icon: User, title: '客户' },
+  { index: '/holders', icon: Avatar, title: '预订人' },
+  { index: '/hotels', icon: OfficeBuilding, title: '酒店' },
+  { index: '/ledger', icon: Notebook, title: '记账本' },
+  { index: '/fields', icon: Collection, title: '基础配置' },
+  { index: '/settings', icon: Setting, title: '设置' },
 ]
 
 const mobileMenuVisible = ref(false)
@@ -198,6 +204,15 @@ function onLogout() {
   white-space: nowrap;
 }
 
+.mobile-page-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mobile-menu {
   border-right: none;
 }
@@ -215,7 +230,7 @@ function onLogout() {
     display: inline-flex;
   }
 
-  .mobile-brand {
+  .mobile-page-title {
     display: inline;
   }
 

@@ -204,7 +204,7 @@
           >
             <el-option v-for="o in checkinInfoOptions" :key="o.id" :label="o.label" :value="o.label" />
           </el-select>
-          <div class="field-tip">选项来自「字段管理」；自定义输入的新值只保存到本酒店，不进字典</div>
+          <div class="field-tip">选项来自「基础配置」；自定义输入的新值只保存到本酒店，不进字典</div>
         </el-form-item>
         <el-form-item label="办理流程">
           <el-input
@@ -360,7 +360,7 @@ import { Plus, Delete, DocumentCopy } from '@element-plus/icons-vue'
 import { hotelsApi, roomTypesApi, optionDictApi } from '../api'
 import { money } from '../utils/format'
 
-// ===== 「需提供信息」预设值字典（字段管理维护，酒店表单多选来源）=====
+// ===== 「需提供信息」预设值字典（基础配置维护，酒店表单多选来源）=====
 const checkinInfoOptions = ref([])
 
 async function loadCheckinInfoOptions() {

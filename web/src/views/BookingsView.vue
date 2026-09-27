@@ -116,7 +116,10 @@
         <el-table-column label="成本" width="105" align="right">
           <template #default="{ row }"><span class="money">{{ money(row.cost_total) }}</span></template>
         </el-table-column>
-        <el-table-column label="利润" width="95" align="right">
+        <el-table-column label="手续费" width="90" align="right">
+          <template #default="{ row }"><span class="money money-fee">{{ money(row.fee) }}</span></template>
+        </el-table-column>
+        <el-table-column label="净利" width="95" align="right">
           <template #default="{ row }">
             <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
           </template>
@@ -153,11 +156,24 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="95">
+        <el-table-column label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="statusMeta(row.status).type" :class="statusMeta(row.status).cls" size="small">
-              {{ statusMeta(row.status).label }}
-            </el-tag>
+            <!-- V7 内联改状态：点徽标展开全部状态，选中即保存（权益流转由后端 PUT 处理） -->
+            <el-dropdown trigger="click" @command="(s) => onInlineStatusChange(row, s)">
+              <el-tag :type="statusMeta(row.status).type" :class="statusMeta(row.status).cls" size="small" class="status-toggle">
+                {{ statusMeta(row.status).label }}<el-icon class="status-caret"><ArrowDown /></el-icon>
+              </el-tag>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-for="(m, k) in STATUS_MAP"
+                    :key="k"
+                    :command="k"
+                    :disabled="k === row.status"
+                  >{{ m.label }}</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="210" fixed="right">
@@ -191,9 +207,17 @@
             <span class="m-value">{{ row.items_summary || '-' }}</span>
           </div>
           <div class="m-line">
-            <span class="m-label">卖价/利润</span>
+            <span class="m-label">卖价/成本</span>
             <span class="m-value">
               <span class="money">{{ money(row.sale_total) }}</span>
+              /
+              <span class="money">{{ money(row.cost_total) }}</span>
+            </span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">手续费/净利</span>
+            <span class="m-value">
+              <span class="money money-fee">{{ money(row.fee) }}</span>
               /
               <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
             </span>
@@ -216,6 +240,20 @@
             <el-button text type="primary" size="small" @click="openEdit(row)">编辑</el-button>
             <el-button text type="primary" size="small" @click="openCopy(row)">复制</el-button>
             <el-button text type="danger" size="small" @click="onDelete(row)">删除</el-button>
+            <!-- 移动端改状态：ActionSheet 式下拉 -->
+            <el-dropdown trigger="click" class="m-status-dd" @command="(s) => onInlineStatusChange(row, s)">
+              <el-button text type="primary" size="small">改状态</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-for="(m, k) in STATUS_MAP"
+                    :key="k"
+                    :command="k"
+                    :disabled="k === row.status"
+                  >{{ m.label }}</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
       </div>
@@ -393,9 +431,26 @@
             placeholder="本单成本"
             style="width: 100%"
           />
-          <span v-if="form.cost_total" class="nights-tip">
-            预计利润：{{ profitText(formSaleTotal - form.cost_total) }}
+        </el-form-item>
+
+        <!-- V7 手续费率：默认 渠道=闲鱼→1.6% 其他→0；切渠道时未手动改过则跟随默认 -->
+        <el-form-item label="手续费率">
+          <el-input-number
+            v-model="form.fee_rate_pct"
+            :min="0"
+            :max="50"
+            :precision="1"
+            :step="0.1"
+            :controls="false"
+            placeholder="0-50"
+            style="width: 120px"
+            @change="onFeeRateManualChange"
+          />
+          <span class="fee-unit">%</span>
+          <span class="nights-tip">
+            手续费：<b class="money">{{ money(formFeeAmount) }}</b>（卖价 × 费率）
           </span>
+          <div class="field-tip">预计净利：{{ profitText(formNetProfit) }}（卖价 − 成本 − 手续费）</div>
         </el-form-item>
 
         <el-form-item label="升级权益">
@@ -431,9 +486,10 @@
         </el-form-item>
 
         <el-form-item label="成交渠道">
-          <el-select v-model="form.channel" style="width: 140px">
+          <el-select v-model="form.channel" style="width: 140px" @change="onChannelChange">
             <el-option v-for="(m, k) in CHANNEL_MAP" :key="k" :label="m" :value="k" />
           </el-select>
+          <div class="field-tip">闲鱼渠道手续费率默认 1.6%，其他渠道默认 0%</div>
         </el-form-item>
         <el-form-item label="含双早">
           <el-switch v-model="form.breakfast_included" active-text="含双早" />
@@ -488,7 +544,11 @@
         <el-descriptions-item label="成本合计">
           <span class="money">{{ money(detail.cost_total) }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="利润">
+        <el-descriptions-item label="手续费">
+          <span class="money money-fee">{{ money(detail.fee) }}</span>
+          <span class="flow-step">（费率 {{ feeRatePctText(detail.fee_rate) }}）</span>
+        </el-descriptions-item>
+        <el-descriptions-item label="净利">
           <span class="money" :class="profitClass(detail.profit)">{{ profitText(detail.profit) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="成交渠道">{{ channelText(detail.channel) }}</el-descriptions-item>
@@ -529,12 +589,12 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { Plus, Delete, ArrowDown } from '@element-plus/icons-vue'
 import { bookingsApi, customersApi, hotelsApi, roomTypesApi, benefitHoldersApi } from '../api'
 import {
   money, profitText, profitClass, dateText, datetimeText,
   toDatetimeString, parseDatetime, statusMeta, STATUS_MAP, statusStep,
-  channelText, CHANNEL_MAP,
+  channelText, CHANNEL_MAP, feeRatePctText, defaultFeeRatePct,
 } from '../utils/format'
 
 // ===== 下拉选项 =====
@@ -675,12 +735,40 @@ const emptyForm = () => ({
   holder_settled: false,
   breakfast_included: false,
   channel: 'xianyu',
+  fee_rate_pct: defaultFeeRatePct('xianyu'), // V7：百分比展示值（1.6 = 1.6%）
   order_time: new Date(),
   status: 'communicating',
   notes: '',
 })
 
 const form = reactive(emptyForm())
+
+// V7 手续费率默认逻辑：切换渠道时若用户未手动改过，则跟随默认（闲鱼 1.6 / 其他 0）
+const feeRateTouched = ref(false)
+
+function onFeeRateManualChange() {
+  feeRateTouched.value = true
+}
+
+function onChannelChange() {
+  if (!feeRateTouched.value) {
+    form.fee_rate_pct = defaultFeeRatePct(form.channel)
+  }
+}
+
+// 手续费金额（表单实时估算）与预计净利
+const formFeeAmount = computed(() =>
+  Math.round(formSaleTotal.value * (Number(form.fee_rate_pct || 0) / 100) * 100) / 100,
+)
+const formNetProfit = computed(() =>
+  formSaleTotal.value - Number(form.cost_total || 0) - formFeeAmount.value,
+)
+
+// fee_rate 载荷值：百分比 → 小数（0~0.5）
+function feeRatePayload() {
+  const pct = Number(form.fee_rate_pct || 0)
+  return Math.round(Math.min(Math.max(pct, 0), 50) * 100) / 10000
+}
 
 const formRules = {
   customer_id: [{ required: true, message: '请选择客户', trigger: 'change' }],
@@ -744,12 +832,13 @@ function applyRate(it, rate) {
 
 function openCreate() {
   Object.assign(form, emptyForm())
+  feeRateTouched.value = false
   formMode.value = 'create'
   roomTypeOptions.value = []
   formVisible.value = true
 }
 
-// 详情 → 全量 PUT 载荷（后端 PUT 需提交所有字段）
+// 详情 → 全量 PUT 载荷（后端 PUT 需提交所有字段；fee_rate 不传会被后端按渠道默认重置，故必须带上）
 function payloadFromDetail(d, override = {}) {
   return {
     customer_id: d.customer_id,
@@ -763,6 +852,7 @@ function payloadFromDetail(d, override = {}) {
     order_time: d.order_time ? toDatetimeString(d.order_time) : '',
     status: d.status,
     channel: d.channel || 'xianyu',
+    fee_rate: Number(d.fee_rate || 0),
     breakfast_included: d.breakfast_included ? 1 : 0,
     holder_settled: d.holder_settled ? 1 : 0,
     notes: d.notes || '',
@@ -787,10 +877,12 @@ async function openEdit(row) {
       holder_settled: !!d.holder_settled,
       breakfast_included: !!d.breakfast_included,
       channel: d.channel || 'xianyu',
+      fee_rate_pct: Math.round(Number(d.fee_rate || 0) * 10000) / 100,
       order_time: parseDatetime(d.order_time),
       status: d.status,
       notes: d.notes || '',
     })
+    feeRateTouched.value = false
     formMode.value = 'edit'
     await loadRoomTypes(d.hotel_id)
     formVisible.value = true
@@ -799,7 +891,7 @@ async function openEdit(row) {
   }
 }
 
-// 复制预定：预填客户/酒店/日期/明细/成本/双早/渠道/备注，清空权益人/权益勾选/结算状态
+// 复制预定：预填客户/酒店/日期/明细/成本/双早/渠道/备注，清空权益人/权益勾选/结算状态；手续费率按渠道取默认
 async function openCopy(row) {
   try {
     const d = await bookingsApi.detail(row.id)
@@ -811,8 +903,10 @@ async function openCopy(row) {
       cost_total: Number(d.cost_total || 0),
       breakfast_included: !!d.breakfast_included,
       channel: d.channel || 'xianyu',
+      fee_rate_pct: defaultFeeRatePct(d.channel || 'xianyu'),
       notes: d.notes || '',
     })
+    feeRateTouched.value = false
     formMode.value = 'copy'
     await loadRoomTypes(d.hotel_id)
     formVisible.value = true
@@ -878,6 +972,7 @@ async function onSave() {
     holder_settled: form.holder_settled ? 1 : 0,
     breakfast_included: form.breakfast_included ? 1 : 0,
     channel: form.channel,
+    fee_rate: feeRatePayload(),
     order_time: toDatetimeString(form.order_time),
     status: form.status,
     notes: form.notes || '',
@@ -917,6 +1012,26 @@ async function toggleSettled(row) {
     // 错误提示已由拦截器统一处理
   } finally {
     settleToggling.value = false
+  }
+}
+
+// V7 列表内改状态：拉详情 → 替换 status → 全量 PUT（权益扣减/返还由后端处理）
+// 乐观更新行内状态，失败回滚并 toast；成功后重拉列表核对（权益/结算等衍生字段同步）
+const inlineStatusChanging = ref({})
+async function onInlineStatusChange(row, status) {
+  if (status === row.status || inlineStatusChanging.value[row.id]) return
+  const prev = row.status
+  inlineStatusChanging.value[row.id] = true
+  row.status = status // 乐观更新
+  try {
+    const d = await bookingsApi.detail(row.id)
+    await bookingsApi.update(row.id, payloadFromDetail(d, { status }))
+    ElMessage.success(`状态已改为「${statusMeta(status).label}」`)
+    await loadList() // 重拉核对（权益流转由后端处理，行内衍生字段以服务端为准）
+  } catch (e) {
+    row.status = prev // 回滚（服务端 400 文案已由拦截器 toast）
+  } finally {
+    delete inlineStatusChanging.value[row.id]
   }
 }
 
@@ -1083,6 +1198,12 @@ onMounted(() => {
 
 .settle-toggle {
   cursor: pointer;
+}
+
+.fee-unit {
+  margin-left: 6px;
+  font-size: 13px;
+  color: #606266;
 }
 
 .flow-step {
