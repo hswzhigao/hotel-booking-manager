@@ -4,7 +4,7 @@
       <div class="page-toolbar desktop-toolbar">
         <el-input
           v-model="filters.search"
-          placeholder="搜索姓名 / 微信 / 电话"
+          placeholder="搜索姓名 / 闲鱼号 / 微信号 / 电话"
           clearable
           style="width: 200px"
           @keyup.enter="loadList(1)"
@@ -43,7 +43,7 @@
         <el-input
           v-model="filters.search"
           class="toolbar-search"
-          placeholder="搜索姓名 / 微信 / 电话"
+          placeholder="搜索姓名 / 闲鱼号 / 微信号 / 电话"
           clearable
           @keyup.enter="loadList(1)"
         />
@@ -102,11 +102,19 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="card_type" label="卡片类型" min-width="100">
-          <template #default="{ row }">{{ row.card_type || '-' }}</template>
+        <el-table-column label="卡片类型" min-width="120">
+          <template #default="{ row }">
+            <template v-if="row.card_type">
+              <el-tag v-for="ct in splitCardTypes(row.card_type)" :key="ct" size="small" class="card-tag">{{ ct }}</el-tag>
+            </template>
+            <span v-else>-</span>
+          </template>
         </el-table-column>
-        <el-table-column prop="wechat" label="微信" min-width="100">
-          <template #default="{ row }">{{ row.wechat || '-' }}</template>
+        <el-table-column prop="xianyu_id" label="闲鱼号" min-width="100">
+          <template #default="{ row }">{{ row.xianyu_id || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="wechat_id" label="微信号" min-width="100">
+          <template #default="{ row }">{{ row.wechat_id || '-' }}</template>
         </el-table-column>
         <el-table-column prop="phone" label="电话" min-width="115">
           <template #default="{ row }">{{ row.phone || '-' }}</template>
@@ -195,7 +203,11 @@
           <div class="m-line">
             <span class="m-label">卡片/来源</span>
             <span class="m-value">
-              {{ row.card_type || '-' }} ·
+              <template v-if="row.card_type">
+                <el-tag v-for="ct in splitCardTypes(row.card_type)" :key="ct" size="small" class="card-tag">{{ ct }}</el-tag>
+              </template>
+              <span v-else>-</span>
+              ·
               <el-tag :type="sourceChannelType(row.source_channel)" size="small">
                 {{ channelText(row.source_channel) }}
               </el-tag>
@@ -255,11 +267,24 @@
           <el-input v-model="form.name" maxlength="50" placeholder="预订人姓名" />
         </el-form-item>
         <el-form-item label="卡片类型">
-          <el-input v-model="form.card_type" maxlength="100" placeholder="如：经典白 / 大白金 / 普通白金" />
+          <el-select
+            v-model="form.card_type"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            placeholder="选择或输入卡片类型"
+            style="width: 100%"
+          >
+            <el-option v-for="ct in cardTypeOptions" :key="ct" :label="ct" :value="ct" />
+          </el-select>
           <div class="field-tip">常见配额：经典白≈酒店6+高尔夫12；普通白金≈酒店2+高尔夫0</div>
         </el-form-item>
-        <el-form-item label="微信">
-          <el-input v-model="form.wechat" maxlength="100" placeholder="微信 / 闲鱼号" />
+        <el-form-item label="闲鱼号">
+          <el-input v-model="form.xianyu_id" maxlength="100" placeholder="闲鱼号" />
+        </el-form-item>
+        <el-form-item label="微信号">
+          <el-input v-model="form.wechat_id" maxlength="100" placeholder="微信号" />
         </el-form-item>
         <el-form-item label="电话">
           <el-input v-model="form.phone" maxlength="30" placeholder="手机号" />
@@ -363,7 +388,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, Collection } from '@element-plus/icons-vue'
-import { benefitHoldersApi, golfBenefitTypesApi } from '../api'
+import { benefitHoldersApi, golfBenefitTypesApi, optionDictApi } from '../api'
 import { monthText, availabilityMeta, AVAILABILITY_MAP, channelText, CHANNEL_MAP } from '../utils/format'
 
 // 来源渠道徽标配色：闲鱼橙、微信绿、其他灰
@@ -462,8 +487,9 @@ const saving = ref(false)
 const emptyForm = () => ({
   id: null,
   name: '',
-  card_type: '',
-  wechat: '',
+  card_type: [],
+  xianyu_id: '',
+  wechat_id: '',
   phone: '',
   source_channel: 'other',
   provides_hotel: true,
@@ -498,14 +524,16 @@ function openCreate() {
   Object.assign(form, emptyForm())
   formVisible.value = true
   ensureTypesLoaded()
+  ensureCardTypesLoaded()
 }
 
 function openEdit(row) {
   Object.assign(form, emptyForm(), {
     id: row.id,
     name: row.name,
-    card_type: row.card_type || '',
-    wechat: row.wechat || '',
+    card_type: splitCardTypes(row.card_type),
+    xianyu_id: row.xianyu_id || '',
+    wechat_id: row.wechat_id || '',
     phone: row.phone || '',
     source_channel: row.source_channel || 'other',
     provides_hotel: row.provides_hotel === undefined ? true : !!row.provides_hotel,
@@ -526,6 +554,7 @@ function openEdit(row) {
   })
   formVisible.value = true
   ensureTypesLoaded()
+  ensureCardTypesLoaded()
 }
 
 async function onSave() {
@@ -544,8 +573,9 @@ async function onSave() {
   }
   const payload = {
     name: form.name,
-    card_type: form.card_type || '',
-    wechat: form.wechat || '',
+    card_type: (form.card_type || []).join(','),
+    xianyu_id: form.xianyu_id || '',
+    wechat_id: form.wechat_id || '',
     phone: form.phone || '',
     source_channel: form.source_channel || 'other',
     provides_hotel: form.provides_hotel ? 1 : 0,
@@ -622,6 +652,30 @@ async function loadTypes() {
 async function ensureTypesLoaded() {
   if (benefitTypes.value.length) return
   await loadTypes()
+}
+
+// ===== 卡片类型多选选项（来自 option_dict category=card_type） =====
+const cardTypeOptions = ref([])
+
+async function loadCardTypes() {
+  try {
+    const data = await optionDictApi.list({ category: 'card_type' })
+    cardTypeOptions.value = (data || []).map((x) => x.label)
+  } catch (e) {
+    cardTypeOptions.value = []
+  }
+}
+
+/** 逗号分隔字符串 → 数组 */
+function splitCardTypes(value) {
+  if (!value) return []
+  return String(value).split(',').map((x) => x.trim()).filter(Boolean)
+}
+
+// 打开新建/编辑时确保卡片类型选项已加载
+async function ensureCardTypesLoaded() {
+  if (cardTypeOptions.value.length) return
+  await loadCardTypes()
 }
 
 
@@ -713,5 +767,10 @@ onMounted(() => loadList(1))
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.card-tag {
+  margin-right: 4px;
+  margin-bottom: 2px;
 }
 </style>

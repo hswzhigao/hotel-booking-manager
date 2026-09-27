@@ -4,7 +4,7 @@
       <div class="page-toolbar desktop-toolbar">
         <el-input
           v-model="filters.search"
-          placeholder="搜索姓名 / 微信 / 电话"
+          placeholder="搜索姓名 / 闲鱼号 / 微信号 / 电话"
           clearable
           style="width: 220px"
           @keyup.enter="loadList(1)"
@@ -28,7 +28,7 @@
         <el-input
           v-model="filters.search"
           class="toolbar-search"
-          placeholder="搜索姓名 / 微信 / 电话"
+          placeholder="搜索姓名 / 闲鱼号 / 微信号 / 电话"
           clearable
           @keyup.enter="loadList(1)"
         />
@@ -54,8 +54,11 @@
       <div class="desktop-table">
       <el-table :data="rows" v-loading="loading" empty-text="暂无客户数据">
         <el-table-column prop="name" label="姓名" min-width="90" />
-        <el-table-column prop="wechat" label="微信" min-width="110">
-          <template #default="{ row }">{{ row.wechat || '-' }}</template>
+        <el-table-column prop="xianyu_id" label="闲鱼号" min-width="110">
+          <template #default="{ row }">{{ row.xianyu_id || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="wechat_id" label="微信号" min-width="110">
+          <template #default="{ row }">{{ row.wechat_id || '-' }}</template>
         </el-table-column>
         <el-table-column prop="phone" label="电话" min-width="120">
           <template #default="{ row }">{{ row.phone || '-' }}</template>
@@ -98,8 +101,12 @@
             </span>
           </div>
           <div class="m-line">
-            <span class="m-label">微信</span>
-            <span class="m-value">{{ row.wechat || '-' }}</span>
+            <span class="m-label">闲鱼号</span>
+            <span class="m-value">{{ row.xianyu_id || '-' }}</span>
+          </div>
+          <div class="m-line">
+            <span class="m-label">微信号</span>
+            <span class="m-value">{{ row.wechat_id || '-' }}</span>
           </div>
           <div class="m-line">
             <span class="m-label">电话</span>
@@ -145,8 +152,11 @@
         <el-form-item label="姓名" prop="name">
           <el-input v-model="form.name" maxlength="50" placeholder="客户姓名" />
         </el-form-item>
-        <el-form-item label="微信" prop="wechat">
-          <el-input v-model="form.wechat" maxlength="100" placeholder="微信 / 闲鱼号" />
+        <el-form-item label="闲鱼号" prop="xianyu_id">
+          <el-input v-model="form.xianyu_id" maxlength="100" placeholder="闲鱼号" />
+        </el-form-item>
+        <el-form-item label="微信号" prop="wechat_id">
+          <el-input v-model="form.wechat_id" maxlength="100" placeholder="微信号" />
         </el-form-item>
         <el-form-item label="电话" prop="phone">
           <el-input v-model="form.phone" maxlength="30" placeholder="手机号" />
@@ -176,7 +186,8 @@
           <el-tag v-if="detail.customer?.is_golf" type="success" size="small" class="tag-gap">高尔夫</el-tag>
           <span v-if="!detail.customer?.is_hotel && !detail.customer?.is_golf">-</span>
         </el-descriptions-item>
-        <el-descriptions-item label="微信">{{ detail.customer?.wechat || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="闲鱼号">{{ detail.customer?.xianyu_id || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="微信号">{{ detail.customer?.wechat_id || '-' }}</el-descriptions-item>
         <el-descriptions-item label="电话">{{ detail.customer?.phone || '-' }}</el-descriptions-item>
         <el-descriptions-item label="预定次数">{{ detail.customer?.booking_count }}</el-descriptions-item>
         <el-descriptions-item label="高尔夫订单数">{{ (detail.golf_orders || []).length }}</el-descriptions-item>
@@ -325,7 +336,8 @@ const saving = ref(false)
 const emptyForm = () => ({
   id: null,
   name: '',
-  wechat: '',
+  xianyu_id: '',
+  wechat_id: '',
   phone: '',
   is_hotel: true,
   is_golf: false,
@@ -347,7 +359,8 @@ function openEdit(row) {
   Object.assign(form, emptyForm(), {
     id: row.id,
     name: row.name,
-    wechat: row.wechat || '',
+    xianyu_id: row.xianyu_id || '',
+    wechat_id: row.wechat_id || '',
     phone: row.phone || '',
     is_hotel: !!row.is_hotel,
     is_golf: !!row.is_golf,
@@ -361,7 +374,8 @@ async function onSave() {
   if (!valid) return
   const payload = {
     name: form.name,
-    wechat: form.wechat || '',
+    xianyu_id: form.xianyu_id || '',
+    wechat_id: form.wechat_id || '',
     phone: form.phone || '',
     is_hotel: form.is_hotel ? 1 : 0,
     is_golf: form.is_golf ? 1 : 0,

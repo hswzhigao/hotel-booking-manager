@@ -178,6 +178,7 @@ import { optionDictApi, golfBenefitTypesApi } from '../api'
 const CATEGORIES = [
   { category: 'checkin_info', name: '入住需提供信息', valueLabel: '预设值' },
   { category: 'golf_course', name: '高尔夫球场', valueLabel: '球场名称' },
+  { category: 'card_type', name: '卡片类型', valueLabel: '卡片类型' },
 ]
 
 // category → 预设值列表（GET 按 sort,id 排序）

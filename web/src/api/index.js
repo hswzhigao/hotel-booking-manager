@@ -75,14 +75,14 @@ export const bookingsApi = {
 // ===== 预订人 benefit-holders（V2 引入，V3.1/V3.3 字段扩展，全组需登录）=====
 export const benefitHoldersApi = {
   // ?search=&willing_present=&willing_assist=&active=&availability=&provides_hotel=&provides_golf=&page=&page_size=
-  // → {total, items:[{id,name,wechat,phone,benefit_types,card_type,source_channel,
+  // → {total, items:[{id,name,xianyu_id,wechat_id,phone,benefit_types,card_type,source_channel,
   //    provides_hotel,provides_golf,willing_present,willing_assist,active,
   //    hotel_benefit_count,availability,
   //    golf_benefits:[{id,benefit_type_id,type_name,course_scope,count_left,refresh_month}],  // V3.1 明细
   //    golf_benefit_total,                                                  // V3.1 = SUM(count_left)
   //    hotel_refresh_month,notes,booking_count,golf_order_count,created_at}]}
   list: (params) => http.get('/benefit-holders', { params }),
-  // {name!,wechat,phone,benefit_types,card_type,source_channel?(xianyu/wechat/other，默认 other),
+  // {name!,xianyu_id,wechat_id,phone,benefit_types,card_type,source_channel?(xianyu/wechat/other，默认 other),
   //  provides_hotel?,provides_golf?(默认 1)，willing_present,willing_assist,active,
   //  hotel_benefit_count,hotel_refresh_month(1-12或空),availability(any|weekend_only|weekday_only),
   //  golf_benefits:[{benefit_type_id,count_left,refresh_month}](整组替换),notes} → {id}

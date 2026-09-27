@@ -180,6 +180,17 @@
           <el-radio-button value="sale">收入</el-radio-button>
           <el-radio-button value="profit">净利</el-radio-button>
         </el-radio-group>
+        <div class="trend-zoom">
+          <el-button-group size="small">
+            <el-button :icon="ArrowLeft" title="向左平移" @click="zoomPan(-1)" />
+            <el-button :icon="ArrowRight" title="向右平移" @click="zoomPan(1)" />
+          </el-button-group>
+          <el-button-group size="small">
+            <el-button :icon="Minus" title="缩小" @click="zoomScale(-1)" />
+            <el-button :icon="Plus" title="放大" @click="zoomScale(1)" />
+          </el-button-group>
+          <el-button size="small" @click="resetZoom">满屏</el-button>
+        </div>
       </div>
       <div v-loading="trendLoading" class="trend-wrap">
         <div ref="chartEl" class="trend-chart"></div>
@@ -444,6 +455,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { ArrowLeft, ArrowRight, Minus, Plus } from '@element-plus/icons-vue'
 // V6 收益图表：echarts 按需引入（禁止全量 import 'echarts'）
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart } from 'echarts/charts'
@@ -697,6 +709,8 @@ function renderTrend() {
   const sliderStart = useSlider ? Math.max(0, Math.round(100 - (10 / periods.length) * 100)) : 0
   // 注意：同轴多 dataZoom 时窗口取第一个组件的 start/end，故 inside 与 slider 需同参
   const zoomWindow = useSlider ? { start: sliderStart, end: 100 } : {}
+  hasSlider.value = useSlider
+  defaultZoom.value = { start: sliderStart, end: 100 }
 
   chart.setOption(
     {
@@ -741,6 +755,51 @@ function renderTrend() {
 
 watch(trendRows, () => renderTrend())
 watch([trendBiz, trendMetric], () => renderTrend())
+
+// ===== 图表缩放控件（◀ ▶ 平移、＋ − 缩放、满屏复位；兼容鼠标拖拽/滚轮） =====
+const hasSlider = ref(false)
+const defaultZoom = ref({ start: 0, end: 100 })
+
+function currentZoom() {
+  if (!chart) return { start: 0, end: 100 }
+  const dz = chart.getOption().dataZoom
+  return dz && dz[0] ? { start: dz[0].start, end: dz[0].end } : { start: 0, end: 100 }
+}
+
+function applyZoom(start, end) {
+  if (!chart) return
+  const s = Math.max(0, Math.min(100, start))
+  const e = Math.max(s + 5, Math.min(100, end))
+  chart.dispatchAction({ type: 'dataZoom', start: s, end: e })
+  if (hasSlider.value) chart.dispatchAction({ type: 'dataZoom', dataZoomIndex: 1, start: s, end: e })
+}
+
+function zoomPan(dir) {
+  const { start, end } = currentZoom()
+  const span = end - start
+  const step = Math.max(5, Math.round(span * 0.25))
+  let s = start + dir * step
+  let e = end + dir * step
+  if (e > 100) { e = 100; s = 100 - span }
+  if (s < 0) { s = 0; e = span }
+  applyZoom(s, e)
+}
+
+function zoomScale(dir) {
+  const { start, end } = currentZoom()
+  const span = end - start
+  const center = (start + end) / 2
+  const newSpan = dir > 0 ? Math.max(10, span * 0.7) : Math.min(100, span * 1.4)
+  let s = center - newSpan / 2
+  let e = center + newSpan / 2
+  if (s < 0) { s = 0; e = newSpan }
+  if (e > 100) { e = 100; s = 100 - newSpan }
+  applyZoom(Math.round(s), Math.round(e))
+}
+
+function resetZoom() {
+  applyZoom(defaultZoom.value.start, defaultZoom.value.end)
+}
 
 function onContainerResize() {
   if (resizeTimer) clearTimeout(resizeTimer)
