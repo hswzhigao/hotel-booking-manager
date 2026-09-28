@@ -111,7 +111,7 @@
         <el-table-column prop="room_count" label="间数" width="65" align="center" />
         <el-table-column prop="items_summary" label="明细" min-width="140" show-overflow-tooltip />
         <el-table-column label="卖价" width="105" align="right">
-          <template #default="{ row }"><span class="money">{{ money(row.sale_total) }}</span></template>
+          <template #default="{ row }"><span class="money money-revenue">{{ money(row.sale_total) }}</span></template>
         </el-table-column>
         <el-table-column label="成本" width="105" align="right">
           <template #default="{ row }"><span class="money">{{ money(row.cost_total) }}</span></template>
@@ -209,7 +209,7 @@
           <div class="m-line">
             <span class="m-label">卖价/成本</span>
             <span class="m-value">
-              <span class="money">{{ money(row.sale_total) }}</span>
+              <span class="money money-revenue">{{ money(row.sale_total) }}</span>
               /
               <span class="money">{{ money(row.cost_total) }}</span>
             </span>
@@ -418,7 +418,7 @@
         </el-form-item>
         <el-form-item>
           <el-button :icon="Plus" plain type="primary" @click="addItem">加一间</el-button>
-          <span class="sale-summary">卖价合计（每晚价×晚数）：<b class="money">{{ money(formSaleTotal) }}</b></span>
+          <span class="sale-summary">卖价合计（每晚价×晚数）：<b class="money money-revenue">{{ money(formSaleTotal) }}</b></span>
         </el-form-item>
 
         <el-form-item label="成本合计" prop="cost_total">
@@ -539,7 +539,7 @@
         <el-descriptions-item label="晚数">{{ detail.nights }}</el-descriptions-item>
         <el-descriptions-item label="间数">{{ detail.room_count }}</el-descriptions-item>
         <el-descriptions-item label="卖价合计">
-          <span class="money">{{ money(detail.sale_total) }}</span>
+          <span class="money money-revenue">{{ money(detail.sale_total) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="成本合计">
           <span class="money">{{ money(detail.cost_total) }}</span>
@@ -592,7 +592,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, ArrowDown } from '@element-plus/icons-vue'
 import { bookingsApi, customersApi, hotelsApi, roomTypesApi, benefitHoldersApi } from '../api'
 import {
-  money, profitText, profitClass, dateText, datetimeText,
+  money, profitText, profitClass, revenueClass, dateText, datetimeText,
   toDatetimeString, parseDatetime, statusMeta, STATUS_MAP, statusStep,
   channelText, CHANNEL_MAP, feeRatePctText, defaultFeeRatePct,
 } from '../utils/format'

@@ -38,7 +38,7 @@
           <div class="biz-grid">
             <div class="biz-item">
               <div class="stat-label">收入</div>
-              <div class="stat-value">{{ money(summary.total_sale) }}</div>
+              <div class="stat-value money-revenue">{{ money(summary.total_sale) }}</div>
             </div>
             <div class="biz-item">
               <div class="stat-label">成本</div>
@@ -56,11 +56,11 @@
             </div>
             <div class="biz-item">
               <div class="stat-label">利润率</div>
-              <div class="stat-value">{{ summary.hotel_profit_rate ?? '-' }}%</div>
+              <div class="stat-value money-revenue">{{ summary.hotel_profit_rate ?? '-' }}%</div>
             </div>
             <div class="biz-item">
               <div class="stat-label">本月收入</div>
-              <div class="stat-value">{{ money(summary.month_sale) }}</div>
+              <div class="stat-value money-revenue">{{ money(summary.month_sale) }}</div>
             </div>
             <div class="biz-item">
               <div class="stat-label">本月净利</div>
@@ -82,7 +82,7 @@
           <div class="biz-grid">
             <div class="biz-item">
               <div class="stat-label">收入</div>
-              <div class="stat-value">{{ money(summary.golf_total_sale) }}</div>
+              <div class="stat-value money-revenue">{{ money(summary.golf_total_sale) }}</div>
             </div>
             <div class="biz-item">
               <div class="stat-label">成本</div>
@@ -465,7 +465,7 @@ import {
 import { CanvasRenderer } from 'echarts/renderers'
 import { bookingsApi, golfOrdersApi, statsApi } from '../api'
 import {
-  money, profitText, profitClass, datetimeText, statusMeta, statusStep, golfStatusMeta, channelText,
+  money, profitText, profitClass, revenueClass, datetimeText, statusMeta, statusStep, golfStatusMeta, channelText,
   feeRatePctText,
 } from '../utils/format'
 
@@ -498,26 +498,27 @@ const ledgerCards = computed(() => [
   {
     label: '总营收',
     value: money(summary.value.all_total_sale),
+    cls: revenueClass(),
     sub: `${summary.value.all_order_count || 0} 单（酒店+高尔夫）`,
   },
   { label: '总成本', value: money(summary.value.all_total_cost) },
   { label: '手续费', value: money(summary.value.all_total_fee) },
-  { label: '毛利润', value: profitText(summary.value.all_gross_profit) },
+  { label: '毛利润', value: profitText(summary.value.all_gross_profit), cls: profitClass(summary.value.all_gross_profit) },
   {
     label: '净利润',
     value: profitText(summary.value.all_net_profit),
     sub: `毛利 ${money(summary.value.all_gross_profit)} − 手续费 ${money(summary.value.all_total_fee)}`,
     cls: profitClass(summary.value.all_net_profit),
   },
-  { label: '利润率', value: rateText(summary.value.all_profit_rate), sub: '净利 / 营收' },
+  { label: '利润率', value: rateText(summary.value.all_profit_rate), sub: '净利 / 营收', cls: revenueClass() },
 ])
 
 // V7 本月卡组（month_all_*，含手动记账）；副行注明口径，手动月收支单独小字
 const monthCards = computed(() => [
-  { label: '本月营收', value: money(summary.value.month_all_sale), sub: '含手动记账' },
+  { label: '本月营收', value: money(summary.value.month_all_sale), sub: '含手动记账', cls: revenueClass() },
   { label: '本月成本', value: money(summary.value.month_all_cost), sub: '含手动记账' },
   { label: '手续费', value: money(summary.value.month_all_fee) },
-  { label: '本月毛利', value: profitText(summary.value.month_all_gross) },
+  { label: '本月毛利', value: profitText(summary.value.month_all_gross), cls: profitClass(summary.value.month_all_gross) },
   {
     label: '本月净利',
     value: profitText(summary.value.month_all_net),
@@ -526,6 +527,7 @@ const monthCards = computed(() => [
   {
     label: '利润率',
     value: rateText(summary.value.month_all_rate),
+    cls: revenueClass(),
     sub: `手动：收入 ${money(summary.value.manual_month_income)} / 支出 ${money(summary.value.manual_month_expense)}`,
   },
 ])

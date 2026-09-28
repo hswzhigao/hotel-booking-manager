@@ -6,7 +6,7 @@ export function money(value) {
   return `¥${n.toFixed(2)}`
 }
 
-/** 利润：正绿负红，保留两位小数 */
+/** 利润：+号前缀正或空，保留两位小数 */
 export function profitText(value) {
   const n = Number(value || 0)
   return (n > 0 ? '+' : '') + n.toFixed(2)
@@ -19,6 +19,11 @@ export function profitClass(value) {
     positive: n > 0,
     negative: n < 0,
   }
+}
+
+/** 营收/卖价类数字红色类标记 */
+export function revenueClass() {
+  return { 'money-revenue': true }
 }
 
 /** 日期 YYYY-MM-DD */

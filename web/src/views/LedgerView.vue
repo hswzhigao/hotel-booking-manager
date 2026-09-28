@@ -53,7 +53,7 @@
       <div class="summary-grid" v-loading="loading">
         <div class="summary-item">
           <div class="summary-label">收入</div>
-          <div class="summary-value income">¥{{ Number(summary.income || 0).toFixed(2) }}</div>
+          <div class="summary-value income money-revenue">¥{{ Number(summary.income || 0).toFixed(2) }}</div>
         </div>
         <div class="summary-item">
           <div class="summary-label">支出</div>
@@ -413,11 +413,11 @@ onMounted(() => {
 }
 
 .ledger-income {
-  color: #67c23a;
+  color: #f56c6c;
 }
 
 .ledger-expense {
-  color: #f56c6c;
+  color: #303133;
 }
 
 .biz-tag {

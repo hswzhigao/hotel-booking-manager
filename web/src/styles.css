@@ -29,16 +29,23 @@ body,
   font-variant-numeric: tabular-nums;
 }
 
+/* 利润（净利润/毛利）红色：中国记账惯例，盈利用红字 */
 .money-profit {
   font-weight: 600;
 }
 
 .money-profit.positive {
-  color: #67c23a;
+  color: #f56c6c;
 }
 
 .money-profit.negative {
   color: #f56c6c;
+}
+
+/* 营收/卖价/收入 数字红色，稍不同于利润的粗体 */
+.money-revenue {
+  color: #f56c6c;
+  font-weight: 500;
 }
 
 /* V7 手续费金额（橙色弱化，区别于净利的正绿负红） */

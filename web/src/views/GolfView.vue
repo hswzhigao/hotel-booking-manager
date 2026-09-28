@@ -93,7 +93,7 @@
           </template>
         </el-table-column>
         <el-table-column label="卖价" width="95" align="right">
-          <template #default="{ row }"><span class="money">{{ money(row.sale_price) }}</span></template>
+          <template #default="{ row }"><span class="money money-revenue">{{ money(row.sale_price) }}</span></template>
         </el-table-column>
         <el-table-column label="成本" width="95" align="right">
           <template #default="{ row }"><span class="money">{{ money(row.cost_price) }}</span></template>
@@ -162,7 +162,7 @@
           <div class="m-line">
             <span class="m-label">卖价/成本</span>
             <span class="m-value">
-              <span class="money">{{ money(row.sale_price) }}</span>
+              <span class="money money-revenue">{{ money(row.sale_price) }}</span>
               /
               <span class="money">{{ money(row.cost_price) }}</span>
             </span>
@@ -393,7 +393,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, ArrowDown } from '@element-plus/icons-vue'
 import { golfOrdersApi, customersApi, benefitHoldersApi , optionDictApi} from '../api'
 import {
-  money, profitText, profitClass, dateText, datetimeText,
+  money, profitText, profitClass, revenueClass, dateText, datetimeText,
   toDatetimeString, parseDatetime, isWeekend,
   golfStatusMeta, GOLF_STATUS_MAP, channelText, CHANNEL_MAP, availabilityMeta,
   defaultFeeRatePct,

@@ -73,7 +73,7 @@
         <el-table-column prop="booking_count" label="预定次数" width="90" align="center" />
         <el-table-column prop="total_room_nights" label="间夜数" width="80" align="center" />
         <el-table-column label="累计消费" width="110" align="right">
-          <template #default="{ row }"><span class="money">{{ money(row.total_spend) }}</span></template>
+          <template #default="{ row }"><span class="money money-revenue">{{ money(row.total_spend) }}</span></template>
         </el-table-column>
         <el-table-column prop="notes" label="备注" min-width="140" show-overflow-tooltip>
           <template #default="{ row }">{{ row.notes || '-' }}</template>
@@ -114,7 +114,7 @@
           </div>
           <div class="m-line">
             <span class="m-label">累计消费</span>
-            <span class="m-value money">{{ money(row.total_spend) }}</span>
+            <span class="m-value money money-revenue">{{ money(row.total_spend) }}</span>
           </div>
           <div class="m-line">
             <span class="m-label">间夜数</span>
@@ -193,7 +193,7 @@
         <el-descriptions-item label="高尔夫订单数">{{ (detail.golf_orders || []).length }}</el-descriptions-item>
         <el-descriptions-item label="间夜数">{{ detail.customer?.total_room_nights }}</el-descriptions-item>
         <el-descriptions-item label="累计消费">
-          <span class="money">{{ money(detail.customer?.total_spend) }}</span>
+          <span class="money money-revenue">{{ money(detail.customer?.total_spend) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ detail.customer?.notes || '-' }}</el-descriptions-item>
       </el-descriptions>
@@ -220,7 +220,7 @@
         </el-table-column>
         <el-table-column prop="players" label="人数" width="60" align="center" />
         <el-table-column label="卖价" width="95" align="right">
-          <template #default="{ row }"><span class="money">{{ money(row.sale_price) }}</span></template>
+          <template #default="{ row }"><span class="money money-revenue">{{ money(row.sale_price) }}</span></template>
         </el-table-column>
         <el-table-column label="状态" width="80">
           <template #default="{ row }">
@@ -252,7 +252,7 @@
           </template>
         </el-table-column>
         <el-table-column label="总价" width="95" align="right">
-          <template #default="{ row }"><span class="money">{{ money(row.sale_total) }}</span></template>
+          <template #default="{ row }"><span class="money money-revenue">{{ money(row.sale_total) }}</span></template>
         </el-table-column>
         <el-table-column label="权益" width="60" align="center">
           <template #default="{ row }">
