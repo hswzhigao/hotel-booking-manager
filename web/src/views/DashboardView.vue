@@ -949,11 +949,8 @@ onBeforeUnmount(() => {
 }
 
 .stat-value.positive,
-.money-profit.positive {
-  color: #67c23a;
-}
-
 .stat-value.negative,
+.money-profit.positive,
 .money-profit.negative {
   color: #f56c6c;
 }
