@@ -42,9 +42,9 @@ body,
   color: #f56c6c;
 }
 
-/* 营收/卖价/收入 数字红色，稍不同于利润的粗体 */
+/* 营收/卖价/收入 数字红色，!important 确保不受组件 scoped 样式覆盖 */
 .money-revenue {
-  color: #f56c6c;
+  color: #f56c6c !important;
   font-weight: 500;
 }
 
