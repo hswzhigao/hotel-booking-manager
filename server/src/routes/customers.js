@@ -24,7 +24,9 @@ const STATS_SQL = `
      WHERE b.customer_id = c.id AND b.status NOT IN ('cancelled','communicating') GROUP BY b.id, b.nights
    ) t2) total_room_nights,
   (SELECT COALESCE(SUM(b.sale_total), 0) FROM bookings b
-   WHERE b.customer_id = c.id AND b.status NOT IN ('cancelled','communicating')) total_spend`;
+   WHERE b.customer_id = c.id AND b.status NOT IN ('cancelled','communicating'))
+ + (SELECT COALESCE(SUM(g.sale_price), 0) FROM golf_orders g
+   WHERE g.customer_id = c.id AND g.status NOT IN ('cancelled')) total_spend`;
 
 // 客户列表（含统计）
 router.get('/', async (req, res, next) => {

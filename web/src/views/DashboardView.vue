@@ -64,7 +64,7 @@
             </div>
             <div class="biz-item">
               <div class="stat-label">本月净利</div>
-              <div class="stat-value" :class="profitClass(summary.hotel_month_profit)">
+              <div class="stat-value money-revenue" :class="profitClass(summary.hotel_month_profit)">
                 {{ profitText(summary.hotel_month_profit) }}
               </div>
             </div>
@@ -104,11 +104,11 @@
             </div>
             <div class="biz-item">
               <div class="stat-label">本月收入</div>
-              <div class="stat-value">{{ money(summary.golf_month_sale) }}</div>
+              <div class="stat-value money-revenue">{{ money(summary.golf_month_sale) }}</div>
             </div>
             <div class="biz-item">
               <div class="stat-label">本月净利</div>
-              <div class="stat-value" :class="profitClass(summary.golf_month_profit)">
+              <div class="stat-value money-revenue" :class="profitClass(summary.golf_month_profit)">
                 {{ profitText(summary.golf_month_profit) }}
               </div>
             </div>
