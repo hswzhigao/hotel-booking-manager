@@ -149,3 +149,26 @@ export const statsApi = {
   //   V7 利润=净利口径，由前端按 sale−cost−fee 计算，无数据周期由前端补 0
   trend: (params) => http.get('/stats/trend', { params }),
 }
+
+// ===== 数据导出 export（CSV 下载，带当前筛选条件）=====
+async function downloadCsv(url, params) {
+  const res = await http.get(url, { params, responseType: 'blob' })
+  const blob = res.data instanceof Blob ? res.data : new Blob([res.data])
+  const cd = res.headers['content-disposition'] || ''
+  const m = cd.match(/filename="?([^";]+)"?/)
+  const filename = m ? m[1] : '导出.csv'
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(link.href)
+}
+
+export const exportApi = {
+  bookings: (params) => downloadCsv('/bookings/export', params),
+  golfOrders: (params) => downloadCsv('/golf-orders/export', params),
+  customers: (params) => downloadCsv('/customers/export', params),
+  benefitHolders: (params) => downloadCsv('/benefit-holders/export', params),
+}

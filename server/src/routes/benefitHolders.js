@@ -169,6 +169,57 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// 导出 CSV（与列表相同筛选，不分页）
+router.get('/export', async (req, res, next) => {
+  try {
+    const { search = '', willing_present, willing_assist, active, availability, provides_hotel, provides_golf } = req.query;
+    const where = []; const params = [];
+    if (search) {
+      const like = `%${search}%`;
+      where.push('(h.name LIKE ? OR h.search_key LIKE ? OR h.xianyu_id LIKE ? OR h.wechat_id LIKE ? OR h.phone LIKE ? OR h.benefit_types LIKE ? OR h.card_type LIKE ?)');
+      params.push(like, like, like, like, like, like, like);
+    }
+    if (willing_present !== undefined && willing_present !== '') { where.push('h.willing_present = ?'); params.push(Number(willing_present) === 1 ? 1 : 0); }
+    if (willing_assist !== undefined && willing_assist !== '') { where.push('h.willing_assist = ?'); params.push(Number(willing_assist) === 1 ? 1 : 0); }
+    if (active !== undefined && active !== '') { where.push('h.active = ?'); params.push(Number(active) === 1 ? 1 : 0); }
+    if (provides_hotel !== undefined && provides_hotel !== '') { where.push('h.provides_hotel = ?'); params.push(Number(provides_hotel) === 1 ? 1 : 0); }
+    if (provides_golf !== undefined && provides_golf !== '') { where.push('h.provides_golf = ?'); params.push(Number(provides_golf) === 1 ? 1 : 0); }
+    if (availability) {
+      if (!AVAILABILITIES.includes(availability)) return res.status(400).json({ error: '可用时间筛选值不合法' });
+      where.push('h.availability = ?'); params.push(availability);
+    }
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const [rows] = await pool.query(
+      `SELECT h.*, ${GOLF_BENEFITS_SQL},
+        (SELECT COUNT(*) FROM bookings b WHERE b.benefit_holder_id = h.id) booking_count,
+        (SELECT COUNT(*) FROM golf_orders g WHERE g.benefit_holder_id = h.id) golf_order_count
+      FROM benefit_holders h ${whereSql} ORDER BY h.active DESC, h.id DESC`,
+      params
+    );
+    const CH_LABEL = { xianyu: '闲鱼', wechat: '微信', other: '其他' };
+    const AVA_LABEL = { any: '不限', weekend_only: '仅周末', weekday_only: '仅工作日' };
+    const { sendCsv } = require('../utils/csv');
+    sendCsv(res, `预订人_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['姓名', '闲鱼号', '微信号', '电话', '卡片类型', '酒店权益剩余', '酒店更新月', '高尔夫权益明细', '可用时间', '愿意到场', '愿意协助', '合作中', '酒店订单数', '高尔夫订单数', '来源渠道', '备注'],
+      rows.map(h => {
+        let golfDetail = '';
+        try {
+          const arr = JSON.parse(h.golf_benefits || '[]');
+          golfDetail = arr.map(b => `${b.type_name}×${b.count_left}`).join('、');
+        } catch (e) { /* 忽略解析失败 */ }
+        return [
+          h.name, h.xianyu_id || '', h.wechat_id || '', h.phone || '',
+          h.card_type || '', h.hotel_benefit_count, h.hotel_refresh_month || '',
+          golfDetail, AVA_LABEL[h.availability] || h.availability,
+          h.willing_present ? '是' : '否', h.willing_assist ? '是' : '否', h.active ? '是' : '否',
+          h.booking_count, h.golf_order_count,
+          CH_LABEL[h.source_channel] || h.source_channel || '', h.notes || '',
+        ];
+      })
+    );
+  } catch (e) { next(e); }
+});
+
 router.post('/', async (req, res, next) => {
   const conn = await pool.getConnection();
   try {

@@ -162,6 +162,66 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// 导出 CSV（与列表相同筛选，不分页）
+router.get('/export', async (req, res, next) => {
+  try {
+    const { customer_id, hotel_id, status, date_from, date_to, search = '' } = req.query;
+    const where = []; const params = [];
+    if (customer_id) { where.push('b.customer_id = ?'); params.push(customer_id); }
+    if (hotel_id) { where.push('b.hotel_id = ?'); params.push(hotel_id); }
+    if (status) {
+      if (!STATUSES.includes(status)) bad(400, '状态不合法');
+      where.push('b.status = ?'); params.push(status);
+    }
+    if (date_from) { if (!parseDate(date_from)) bad(400, 'date_from 格式应为 YYYY-MM-DD'); where.push('b.check_in >= ?'); params.push(date_from); }
+    if (date_to) { if (!parseDate(date_to)) bad(400, 'date_to 格式应为 YYYY-MM-DD'); where.push('b.check_in <= ?'); params.push(date_to); }
+    if (search) { where.push('(c.name LIKE ? OR c.search_key LIKE ? OR h.name LIKE ? OR h.search_key LIKE ?)'); const like = `%${search}%`; params.push(like, like, like, like); }
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const [rows] = await pool.query(
+      `SELECT b.*, c.name customer_name, h.name hotel_name, bh.name benefit_holder_name,
+        ROUND(b.sale_total * b.fee_rate, 2) fee,
+        (b.sale_total - b.cost_total - ROUND(b.sale_total * b.fee_rate, 2)) profit
+      FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id
+      LEFT JOIN benefit_holders bh ON bh.id = b.benefit_holder_id
+      ${whereSql} ORDER BY b.order_time DESC, b.id DESC`,
+      params
+    );
+    const ids = rows.map(r => r.id);
+    const namesByBooking = {};
+    const cnt = {};
+    if (ids.length) {
+      const [items] = await pool.query(
+        `SELECT bi.booking_id, rt.name FROM booking_items bi JOIN room_types rt ON rt.id = bi.room_type_id WHERE bi.booking_id IN (?)`, [ids]
+      );
+      for (const it of items) { const k = `${it.booking_id}|${it.name}`; cnt[k] = (cnt[k] || 0) + 1; }
+      for (const it of items) {
+        namesByBooking[it.booking_id] = namesByBooking[it.booking_id] || new Set();
+        namesByBooking[it.booking_id].add(it.name);
+      }
+    }
+    const STATUS_LABEL = {
+      communicating: '沟通中', ordered: '已下单', info_confirmed: '已确认信息', booking: '预订中',
+      booked: '已预订', hotel_confirmed: '酒店已确认', awaiting_checkin: '待入住', checked_in: '已入住',
+      finished: '入住完成', cancelled: '已取消',
+    };
+    const CH_LABEL = { xianyu: '闲鱼', wechat: '微信', other: '其他' };
+    const { sendCsv } = require('../utils/csv');
+    sendCsv(res, `酒店订单_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['下单时间', '客户', '酒店', '状态', '入住日期', '离店日期', '晚数', '房型', '卖价合计', '成本合计', '手续费率', '手续费', '净利', '预订人', '权益张数', '含双早', '渠道', '已结算', '备注'],
+      rows.map(r => [
+        String(r.order_time || '').slice(0, 19).replace('T', ' '),
+        r.customer_name, r.hotel_name, STATUS_LABEL[r.status] || r.status,
+        String(r.check_in || '').slice(0, 10), String(r.check_out || '').slice(0, 10),
+        r.nights, [...(namesByBooking[r.id] || [])].map(n => `${n}×${cnt[`${r.id}|${n}`]}`).join('、'),
+        Number(r.sale_total || 0).toFixed(2), Number(r.cost_total || 0).toFixed(2),
+        `${Number((r.fee_rate || 0) * 100).toFixed(2)}%`, Number(r.fee || 0).toFixed(2), Number(r.profit || 0).toFixed(2),
+        r.benefit_holder_name || '', r.benefit_count_used, r.breakfast_included ? '是' : '否',
+        CH_LABEL[r.channel] || r.channel || '', r.holder_settled ? '是' : '否', r.notes || '',
+      ])
+    );
+  } catch (e) { next(e); }
+});
+
 // 预定详情
 router.get('/:id', async (req, res, next) => {
   try {

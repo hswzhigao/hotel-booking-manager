@@ -155,6 +155,50 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// 导出 CSV（与列表相同筛选，不分页）
+router.get('/export', async (req, res, next) => {
+  try {
+    const { customer_id, benefit_holder_id, status, date_from, date_to, search = '' } = req.query;
+    const where = []; const params = [];
+    if (customer_id) { where.push('g.customer_id = ?'); params.push(customer_id); }
+    if (benefit_holder_id) { where.push('g.benefit_holder_id = ?'); params.push(benefit_holder_id); }
+    if (status) {
+      if (!STATUSES.includes(status)) bad(400, '状态不合法');
+      where.push('g.status = ?'); params.push(status);
+    }
+    if (date_from) { if (!parseDate(date_from)) bad(400, 'date_from 格式应为 YYYY-MM-DD'); where.push('g.play_date >= ?'); params.push(date_from); }
+    if (date_to) { if (!parseDate(date_to)) bad(400, 'date_to 格式应为 YYYY-MM-DD'); where.push('g.play_date <= ?'); params.push(date_to); }
+    if (search) { where.push('(c.name LIKE ? OR c.search_key LIKE ? OR g.course_name LIKE ? OR g.course_search_key LIKE ?)'); const like = `%${search}%`; params.push(like, like, like, like); }
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const [rows] = await pool.query(
+      `SELECT g.*, c.name customer_name, bh.name benefit_holder_name, t.name benefit_type_name,
+        ROUND(g.sale_price * g.fee_rate, 2) fee,
+        (g.sale_price - g.cost_price - ROUND(g.sale_price * g.fee_rate, 2)) profit
+      FROM golf_orders g
+      JOIN customers c ON c.id = g.customer_id
+      LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
+      LEFT JOIN golf_benefit_types t ON t.id = g.benefit_type_id
+      ${whereSql} ORDER BY g.order_time DESC, g.id DESC`,
+      params
+    );
+    const STATUS_LABEL = { pending: '待定位', booked: '已定位', completed: '已完成', cancelled: '已取消' };
+    const CH_LABEL = { xianyu: '闲鱼', wechat: '微信', other: '其他' };
+    const { sendCsv } = require('../utils/csv');
+    sendCsv(res, `高尔夫订单_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['下单时间', '客户', '预订人', '球场', '打球日期', '开球时间', '人数', '状态', '卖价', '成本', '手续费率', '手续费', '净利', '权益种类', '渠道', '需教定位', '备注'],
+      rows.map(r => [
+        String(r.order_time || '').slice(0, 19).replace('T', ' '),
+        r.customer_name, r.benefit_holder_name || '', r.course_name,
+        String(r.play_date || '').slice(0, 10), String(r.tee_time || '').slice(0, 5),
+        r.players, STATUS_LABEL[r.status] || r.status,
+        Number(r.sale_price || 0).toFixed(2), Number(r.cost_price || 0).toFixed(2),
+        `${Number((r.fee_rate || 0) * 100).toFixed(2)}%`, Number(r.fee || 0).toFixed(2), Number(r.profit || 0).toFixed(2),
+        r.benefit_type_name || '', CH_LABEL[r.channel] || r.channel || '', r.teach_needed ? '是' : '否', r.notes || '',
+      ])
+    );
+  } catch (e) { next(e); }
+});
+
 // 历史球场名（去重，供下拉）
 router.get('/courses', async (req, res, next) => {
   try {

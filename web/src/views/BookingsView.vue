@@ -52,6 +52,7 @@
         />
         <el-button type="primary" @click="loadList(1)">查询</el-button>
         <el-button @click="resetFilters">重置</el-button>
+        <el-button :icon="Download" @click="exportCsv">导出</el-button>
         <div class="toolbar-spacer" />
         <el-button type="primary" :icon="Plus" @click="openCreate">新建预定</el-button>
       </div>
@@ -70,6 +71,7 @@
           {{ filtersExpanded ? '收起筛选' : '筛选' }}
         </el-button>
         <el-button type="primary" :icon="Plus" circle title="新建预定" @click="openCreate" />
+        <el-button :icon="Download" circle title="导出" @click="exportCsv" />
         <div v-show="filtersExpanded" class="filter-extra">
           <el-select v-model="filters.customer_id" placeholder="客户" clearable filterable>
             <el-option v-for="c in customerOptions" :key="c.id" :label="c.name" :value="c.id" />
@@ -589,8 +591,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, ArrowDown } from '@element-plus/icons-vue'
-import { bookingsApi, customersApi, hotelsApi, roomTypesApi, benefitHoldersApi } from '../api'
+import {  Plus, Delete, ArrowDown , Download } from '@element-plus/icons-vue'
+import { bookingsApi, golfOrdersApi, statsApi, exportApi } from '../api'
 import {
   money, profitText, profitClass, revenueClass, dateText, datetimeText,
   toDatetimeString, parseDatetime, statusMeta, STATUS_MAP, statusStep,
@@ -659,6 +661,18 @@ const filters = reactive({
   dateRange: null,
   search: '',
 })
+
+async function exportCsv() {
+  const params = {
+    customer_id: filters.customer_id || undefined,
+    hotel_id: filters.hotel_id || undefined,
+    status: filters.status || undefined,
+    date_from: filters.dateRange?.[0] || undefined,
+    date_to: filters.dateRange?.[1] || undefined,
+    search: filters.search || undefined,
+  }
+  await exportApi.bookings(params)
+}
 
 async function loadList(p = page.value) {
   loading.value = true

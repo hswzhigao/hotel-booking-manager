@@ -19,6 +19,7 @@
         </el-select>
         <el-button type="primary" @click="loadList(1)">查询</el-button>
         <el-button @click="resetFilters">重置</el-button>
+        <el-button :icon="Download" @click="exportCsv">导出</el-button>
         <div class="toolbar-spacer" />
         <el-button type="primary" :icon="Plus" @click="openCreate">新建客户</el-button>
       </div>
@@ -37,6 +38,7 @@
           {{ filtersExpanded ? '收起筛选' : '筛选' }}
         </el-button>
         <el-button type="primary" :icon="Plus" circle title="新建客户" @click="openCreate" />
+        <el-button :icon="Download" circle title="导出" @click="exportCsv" />
         <div v-show="filtersExpanded" class="filter-extra">
           <el-select v-model="filters.is_hotel" placeholder="酒店客户" clearable>
             <el-option label="酒店客户" :value="1" />
@@ -273,8 +275,8 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
-import { customersApi } from '../api'
+import { Plus, Download } from '@element-plus/icons-vue'
+import { customersApi, exportApi } from '../api'
 import { money, dateText, statusMeta, golfStatusMeta } from '../utils/format'
 
 // ===== 列表 =====
@@ -291,6 +293,14 @@ const filters = reactive({
   is_hotel: null,
   is_golf: null,
 })
+
+async function exportCsv() {
+  await exportApi.customers({
+    search: filters.search || undefined,
+    is_hotel: filters.is_hotel ?? undefined,
+    is_golf: filters.is_golf ?? undefined,
+  })
+}
 
 async function loadList(p = page.value) {
   loading.value = true

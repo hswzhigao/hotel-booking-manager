@@ -35,8 +35,9 @@ http.interceptors.request.use((config) => {
 })
 
 // 响应拦截：统一错误提示；401 清 token 跳登录
+// blob 请求（文件下载）返回完整 response，供读取 Content-Disposition 文件名
 http.interceptors.response.use(
-  (response) => response.data,
+  (response) => (response.config.responseType === 'blob' ? response : response.data),
   (error) => {
     const status = error.response?.status
     const message = error.response?.data?.error || '请求失败，请稍后重试'

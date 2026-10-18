@@ -34,6 +34,7 @@
         </el-select>
         <el-button type="primary" @click="loadList(1)">查询</el-button>
         <el-button @click="resetFilters">重置</el-button>
+        <el-button :icon="Download" @click="exportCsv">导出</el-button>
         <div class="toolbar-spacer" />
         <el-button type="primary" :icon="Plus" @click="openCreate">新建预订人</el-button>
       </div>
@@ -52,6 +53,7 @@
           {{ filtersExpanded ? '收起筛选' : '筛选' }}
         </el-button>
         <el-button type="primary" :icon="Plus" circle title="新建预订人" @click="openCreate" />
+        <el-button :icon="Download" circle title="导出" @click="exportCsv" />
         <div v-show="filtersExpanded" class="filter-extra">
           <el-select v-model="filters.willing_present" placeholder="愿意到场" clearable>
             <el-option label="愿意到场" :value="1" />
@@ -387,8 +389,8 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Collection } from '@element-plus/icons-vue'
-import { benefitHoldersApi, golfBenefitTypesApi, optionDictApi } from '../api'
+import { Plus, Delete, Collection, Download } from '@element-plus/icons-vue'
+import { benefitHoldersApi, golfBenefitTypesApi, optionDictApi, exportApi } from '../api'
 import { monthText, availabilityMeta, AVAILABILITY_MAP, channelText, CHANNEL_MAP } from '../utils/format'
 
 // 来源渠道徽标配色：闲鱼橙、微信绿、其他灰
@@ -434,6 +436,18 @@ const filters = reactive({
   provides_hotel: null,
   provides_golf: null,
 })
+
+async function exportCsv() {
+  await exportApi.benefitHolders({
+    search: filters.search || undefined,
+    willing_present: filters.willing_present ?? undefined,
+    willing_assist: filters.willing_assist ?? undefined,
+    active: filters.active ?? undefined,
+    availability: filters.availability || undefined,
+    provides_hotel: filters.provides_hotel ?? undefined,
+    provides_golf: filters.provides_golf ?? undefined,
+  })
+}
 
 async function loadList(p = page.value) {
   loading.value = true

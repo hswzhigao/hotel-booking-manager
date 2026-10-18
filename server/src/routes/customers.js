@@ -49,6 +49,33 @@ router.get('/', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// 导出 CSV（与列表相同筛选，不分页）
+router.get('/export', async (req, res, next) => {
+  try {
+    const { search = '', is_hotel, is_golf } = req.query;
+    const like = `%${search}%`;
+    const where = []; const params = [];
+    if (search) { where.push('(c.name LIKE ? OR c.search_key LIKE ? OR c.xianyu_id LIKE ? OR c.wechat_id LIKE ? OR c.phone LIKE ?)'); params.push(like, like, like, like, like); }
+    if (is_hotel !== undefined && is_hotel !== '') { where.push('c.is_hotel = ?'); params.push(Number(is_hotel) === 1 ? 1 : 0); }
+    if (is_golf !== undefined && is_golf !== '') { where.push('c.is_golf = ?'); params.push(Number(is_golf) === 1 ? 1 : 0); }
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const [rows] = await pool.query(
+      `SELECT c.*, ${STATS_SQL} FROM customers c ${whereSql} ORDER BY c.id DESC`, params
+    );
+    const { sendCsv } = require('../utils/csv');
+    sendCsv(res, `客户_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['姓名', '闲鱼号', '微信号', '电话', '酒店客户', '高尔夫客户', '酒店单数', '总间数', '总间夜', '累计消费', '备注', '创建时间'],
+      rows.map(c => [
+        c.name, c.xianyu_id || '', c.wechat_id || '', c.phone || '',
+        c.is_hotel ? '是' : '', c.is_golf ? '是' : '',
+        c.booking_count, c.total_rooms, c.total_room_nights,
+        Number(c.total_spend || 0).toFixed(2), c.notes || '',
+        String(c.created_at || '').slice(0, 19).replace('T', ' '),
+      ])
+    );
+  } catch (e) { next(e); }
+});
+
 // 客户详情（信息 + 历史预定含明细）
 router.get('/:id', async (req, res, next) => {
   try {
