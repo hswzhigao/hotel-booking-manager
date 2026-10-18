@@ -2,6 +2,7 @@
   <div class="login-page">
     <el-card class="login-card">
       <h2 class="login-title">酒店预订管理系统</h2>
+      <p class="login-subtitle">酒店 · 高尔夫预订管理</p>
       <el-form
         ref="formRef"
         :model="form"
@@ -75,12 +76,14 @@ async function onSubmit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1f3a5f 0%, #2c5f8a 100%);
+  background: linear-gradient(135deg, #1d2b4f 0%, #3b6cf6 100%);
 }
 
 .login-card {
   width: 380px;
   padding: 8px 12px;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(16, 24, 40, 0.28);
 }
 
 /* V4 移动端：登录卡不出屏 */
@@ -93,12 +96,21 @@ async function onSubmit() {
 
 .login-title {
   text-align: center;
-  margin: 4px 0 24px;
-  color: #303133;
+  margin: 4px 0 6px;
+  color: #1f2329;
+}
+
+.login-subtitle {
+  text-align: center;
+  margin: 0 0 24px;
+  font-size: 13px;
+  color: #909399;
 }
 
 .login-btn {
   width: 100%;
+  height: 44px;
+  border-radius: 8px;
 }
 
 .login-tip {

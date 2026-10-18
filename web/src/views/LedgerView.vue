@@ -9,6 +9,7 @@
           value-format="YYYY-MM"
           placeholder="选择月份"
           clearable
+          :editable="false"
           style="width: 160px"
         />
         <el-select v-model="filters.type" placeholder="类型" clearable style="width: 120px">
@@ -31,6 +32,7 @@
           value-format="YYYY-MM"
           placeholder="月份"
           clearable
+          :editable="false"
           class="toolbar-search"
         />
         <el-button type="primary" @click="loadList(1)">查询</el-button>
@@ -156,6 +158,7 @@
             type="date"
             value-format="YYYY-MM-DD"
             placeholder="选择日期"
+            :editable="false"
             style="width: 100%"
           />
         </el-form-item>
@@ -380,7 +383,7 @@ onMounted(() => {
 
 <style scoped>
 .pager {
-  margin-top: 16px;
+  margin: 12px 0;
   justify-content: flex-end;
 }
 

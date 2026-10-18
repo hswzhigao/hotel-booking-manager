@@ -3,7 +3,14 @@
     <!-- ===== V7 1. 总账卡组：总营收/总成本/手续费/毛利润/净利润/利润率（all_*） ===== -->
     <div class="section-label">总账</div>
     <div class="ledger-grid" v-loading="summaryLoading">
-      <el-card v-for="card in ledgerCards" :key="card.label" class="stat-card" shadow="hover">
+      <el-card
+        v-for="card in ledgerCards"
+        :key="card.label"
+        class="stat-card"
+        :class="{ 'stat-card-highlight': card.highlight }"
+        shadow="hover"
+      >
+        <div class="stat-icon"><el-icon><component :is="card.icon" /></el-icon></div>
         <div class="stat-label">{{ card.label }}</div>
         <div class="stat-value big" :class="card.cls || ''">{{ card.value }}</div>
         <div v-if="card.sub" class="stat-sub">{{ card.sub }}</div>
@@ -14,11 +21,13 @@
     <div class="section-label">本月<span class="section-tag">含手动记账</span></div>
     <div class="ledger-grid" v-loading="summaryLoading">
       <el-card v-for="card in monthCards" :key="card.label" class="stat-card" shadow="hover">
+        <div class="stat-icon"><el-icon><component :is="card.icon" /></el-icon></div>
         <div class="stat-label">{{ card.label }}</div>
         <div class="stat-value big" :class="card.cls || ''">{{ card.value }}</div>
         <div v-if="card.sub" class="stat-sub">{{ card.sub }}</div>
       </el-card>
       <el-card class="stat-card today-card" shadow="hover">
+        <div class="stat-icon"><el-icon><Coin /></el-icon></div>
         <div class="stat-label">今日收益</div>
         <div class="stat-value big" :class="profitClass(summary.today_profit)">{{ profitText(summary.today_profit) }}</div>
         <div class="stat-sub">卖价 {{ money(summary.today_sale) }} / 成本 {{ money(summary.today_cost) }}</div>
@@ -455,7 +464,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, ArrowRight, Minus, Plus } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, Minus, Plus, Money, Wallet, ShoppingCart, Discount, TrendCharts, Trophy, DataAnalysis, Coin } from '@element-plus/icons-vue'
 // V6 收益图表：echarts 按需引入（禁止全量 import 'echarts'）
 import * as echarts from 'echarts/core'
 import { BarChart, LineChart } from 'echarts/charts'
@@ -500,35 +509,40 @@ const ledgerCards = computed(() => [
     value: money(summary.value.all_total_sale),
     cls: revenueClass(),
     sub: `${summary.value.all_order_count || 0} 单（酒店+高尔夫）`,
+    icon: Wallet,
   },
-  { label: '总成本', value: money(summary.value.all_total_cost) },
-  { label: '手续费', value: money(summary.value.all_total_fee) },
-  { label: '毛利润', value: profitText(summary.value.all_gross_profit), cls: profitClass(summary.value.all_gross_profit) },
+  { label: '总成本', value: money(summary.value.all_total_cost), icon: ShoppingCart },
+  { label: '手续费', value: money(summary.value.all_total_fee), icon: Discount },
+  { label: '毛利润', value: profitText(summary.value.all_gross_profit), cls: profitClass(summary.value.all_gross_profit), icon: TrendCharts },
   {
     label: '净利润',
     value: profitText(summary.value.all_net_profit),
     sub: `毛利 ${money(summary.value.all_gross_profit)} − 手续费 ${money(summary.value.all_total_fee)}`,
     cls: profitClass(summary.value.all_net_profit),
+    icon: Trophy,
+    highlight: true,
   },
-  { label: '利润率', value: rateText(summary.value.all_profit_rate), sub: '净利 / 营收', cls: revenueClass() },
+  { label: '利润率', value: rateText(summary.value.all_profit_rate), sub: '净利 / 营收', cls: revenueClass(), icon: DataAnalysis },
 ])
 
 // V7 本月卡组（month_all_*，含手动记账）；副行注明口径，手动月收支单独小字
 const monthCards = computed(() => [
-  { label: '本月营收', value: money(summary.value.month_all_sale), sub: '含手动记账', cls: revenueClass() },
-  { label: '本月成本', value: money(summary.value.month_all_cost), sub: '含手动记账' },
-  { label: '手续费', value: money(summary.value.month_all_fee) },
-  { label: '本月毛利', value: profitText(summary.value.month_all_gross), cls: profitClass(summary.value.month_all_gross) },
+  { label: '本月营收', value: money(summary.value.month_all_sale), sub: '含手动记账', cls: revenueClass(), icon: Money },
+  { label: '本月成本', value: money(summary.value.month_all_cost), sub: '含手动记账', icon: ShoppingCart },
+  { label: '手续费', value: money(summary.value.month_all_fee), icon: Discount },
+  { label: '本月毛利', value: profitText(summary.value.month_all_gross), cls: profitClass(summary.value.month_all_gross), icon: TrendCharts },
   {
     label: '本月净利',
     value: profitText(summary.value.month_all_net),
     cls: profitClass(summary.value.month_all_net),
+    icon: Trophy,
   },
   {
     label: '利润率',
     value: rateText(summary.value.month_all_rate),
     cls: revenueClass(),
     sub: `手动：收入 ${money(summary.value.manual_month_income)} / 支出 ${money(summary.value.manual_month_expense)}`,
+    icon: DataAnalysis,
   },
 ])
 
@@ -929,6 +943,28 @@ onBeforeUnmount(() => {
 
 .stat-card {
   text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.stat-card-highlight {
+  border: 1px solid var(--el-color-primary);
+}
+
+.stat-icon {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  border-radius: 10px;
+  font-size: 18px;
 }
 
 .stat-label {

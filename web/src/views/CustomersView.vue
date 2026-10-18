@@ -450,7 +450,7 @@ onMounted(() => loadList(1))
 
 <style scoped>
 .pager {
-  margin-top: 16px;
+  margin: 12px 0;
   justify-content: flex-end;
 }
 

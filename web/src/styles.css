@@ -9,6 +9,86 @@ body,
     'Microsoft YaHei', Arial, sans-serif;
 }
 
+/* ===== V13 设计令牌：覆盖 Element Plus CSS 变量（主色 #3b6cf6、成功 #34c77b） ===== */
+:root {
+  --el-color-primary: #3b6cf6;
+  --el-color-primary-rgb: 59, 108, 246;
+  --el-color-primary-light-3: #628df8;
+  --el-color-primary-light-5: #89aafb;
+  --el-color-primary-light-7: #d5e0fd;
+  --el-color-primary-light-8: #e8eefd;
+  --el-color-primary-light-9: #f4f7fe;
+  --el-color-primary-dark-2: #2f58dc;
+  --el-color-success: #34c77b;
+  --el-color-success-rgb: 52, 199, 123;
+  --el-color-success-light-3: #6bd69d;
+  --el-color-success-light-5: #93e2b6;
+  --el-color-success-light-7: #bceece;
+  --el-color-success-light-8: #d5f5e3;
+  --el-color-success-light-9: #ecfbf3;
+  --el-color-success-dark-2: #2aa466;
+  --el-text-color-primary: #1f2329;
+  --el-text-color-regular: #5e6673;
+  --el-border-color-light: #e8ecf2;
+  --el-border-color-lighter: #e8ecf2;
+  --el-bg-color-page: #f4f6fa;
+  --el-table-header-bg-color: #fafbfc;
+  --el-table-header-text-color: #5e6673;
+  --el-table-row-hover-bg-color: #f5f8ff;
+}
+
+/* V13 卡片：圆角 12px + 柔和阴影；正文 padding 16px（移动端见下方覆盖为 12px） */
+.el-card {
+  --el-card-border-radius: 12px;
+  --el-card-padding: 16px;
+  box-shadow: 0 2px 12px rgba(31, 45, 61, 0.06);
+}
+
+/* V13 表格：表头灰底浅字、行 hover 浅蓝、单元格留白 10px 14px、合计行加粗 */
+.el-table .el-table__cell {
+  padding: 10px 0;
+}
+
+.el-table .cell {
+  padding: 0 14px;
+}
+
+.el-table__footer-wrapper td.el-table__cell {
+  font-weight: 600;
+}
+
+/* V13 分页：右对齐、上下留白 12px */
+.el-pagination {
+  justify-content: flex-end;
+  margin: 12px 0;
+}
+
+/* V13 弹窗/抽屉：圆角 12px，标题 16px 600 */
+.el-dialog {
+  border-radius: 12px;
+}
+
+.el-dialog__title,
+.el-drawer__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.el-drawer {
+  border-radius: 12px 0 0 12px;
+}
+
+.el-drawer.ltr {
+  border-radius: 0 12px 12px 0;
+}
+
+/* V13 工具栏按钮圆角 8px */
+.page-toolbar .el-button,
+.mobile-toolbar .el-button {
+  border-radius: 8px;
+}
+
 .page-card {
   margin: 16px;
 }
@@ -76,6 +156,11 @@ body,
   --el-tag-bg-color: #d9f0d0;
   --el-tag-border-color: #3e9e2b;
   --el-tag-text-color: #1f6b10;
+}
+
+/* ===== 桌面/移动元素显隐（V13 表单双日期输入、顶栏等复用） ===== */
+.mobile-only {
+  display: none;
 }
 
 /* ===== V4 移动端适配：断点 768px，纯 CSS 媒体查询切换，桌面端（≥768px）不受影响 ===== */
@@ -153,7 +238,7 @@ body,
   .m-card {
     background: #fff;
     border: 1px solid #e4e7ed;
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 10px 12px;
     margin-bottom: 10px;
   }
@@ -276,6 +361,37 @@ body,
     justify-content: center !important;
     white-space: normal;
     row-gap: 8px;
+  }
+
+  /* V13 移动端输入字号 ≥16px（防 iOS 自动缩放页面） */
+  .el-input__inner,
+  .el-textarea__inner {
+    font-size: 16px;
+  }
+
+  /* V13 移动端桌面/移动元素显隐切换 */
+  .mobile-only {
+    display: block;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* V13 抽屉/弹窗底部操作区 sticky：长表单滚动时按钮始终可见 */
+  .el-drawer__footer {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    border-top: 1px solid var(--el-border-color-lighter);
+    padding: 12px 16px;
+  }
+
+  .el-dialog__footer {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    border-top: 1px solid var(--el-border-color-lighter);
   }
 }
 

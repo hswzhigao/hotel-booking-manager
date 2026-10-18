@@ -1,9 +1,9 @@
 <template>
   <el-container class="layout-root">
     <el-aside :width="isCollapsed ? '64px' : '220px'" class="layout-aside">
-      <div class="brand">
-        <span v-if="!isCollapsed">酒店预订管理</span>
-        <span v-else>酒</span>
+      <div class="brand" :class="{ 'brand-collapsed': isCollapsed }">
+        <span class="brand-logo"><el-icon><OfficeBuilding /></el-icon></span>
+        <span v-if="!isCollapsed" class="brand-name">酒店预订管理</span>
       </div>
       <el-menu
         :default-active="activeMenu"
@@ -33,7 +33,7 @@
           <span class="mobile-page-title mobile-only">{{ pageTitle }}</span>
         </div>
         <div class="header-right">
-          <el-icon class="desktop-only"><UserFilled /></el-icon>
+          <el-avatar :size="28" class="user-avatar desktop-only">{{ (auth.username || '用').charAt(0) }}</el-avatar>
           <span class="username desktop-only">{{ auth.username }}</span>
           <el-button text type="danger" @click="onLogout">
             <span class="desktop-only">退出登录</span>
@@ -69,7 +69,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  Odometer, Tickets, User, Avatar, OfficeBuilding, Collection, Setting, Expand, Fold, UserFilled, Flag, Menu, Notebook,
+  Odometer, Tickets, User, Avatar, OfficeBuilding, Collection, Setting, Expand, Fold, Flag, Menu, Notebook,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
 
@@ -112,7 +112,7 @@ function onLogout() {
 }
 
 .layout-aside {
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid #e8ecf2;
   transition: width 0.2s;
   overflow: hidden;
 }
@@ -121,11 +121,36 @@ function onLogout() {
   height: 60px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 600;
-  color: #409eff;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 18px;
   white-space: nowrap;
+}
+
+.brand-collapsed {
+  justify-content: center;
+  padding: 0;
+}
+
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--el-color-primary);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 16px;
+}
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2329;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .layout-menu {
@@ -136,12 +161,31 @@ function onLogout() {
   width: 100%;
 }
 
+.layout-menu :deep(.el-menu-item) {
+  margin: 4px 8px;
+  border-radius: 8px;
+}
+
+.layout-menu :deep(.el-menu-item:hover) {
+  background-color: #f5f7fa;
+}
+
+.layout-menu :deep(.el-menu-item.is-active) {
+  background-color: #e8eefd;
+  color: var(--el-color-primary);
+}
+
+.layout-menu :deep(.el-menu-item.is-active .el-icon) {
+  color: var(--el-color-primary);
+}
+
 .layout-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid #e8ecf2;
   background: #fff;
+  height: 56px;
 }
 
 .header-left {
@@ -153,32 +197,40 @@ function onLogout() {
 .collapse-btn {
   font-size: 20px;
   cursor: pointer;
-  color: #606266;
+  color: #5e6673;
 }
 
 .collapse-btn:hover {
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 
 .page-title {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: #1f2329;
 }
 
 .header-right {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #606266;
+  color: #5e6673;
+}
+
+.user-avatar {
+  background: var(--el-color-primary);
+  color: #fff;
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .username {
   font-size: 14px;
+  color: #1f2329;
 }
 
 .layout-main {
-  background: #f5f7fa;
+  background: #f4f6fa;
   padding: 0;
 }
 
@@ -190,24 +242,24 @@ function onLogout() {
 .mobile-menu-btn {
   font-size: 22px;
   cursor: pointer;
-  color: #606266;
+  color: #5e6673;
 }
 
 .mobile-menu-btn:hover {
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 
 .mobile-brand {
   font-size: 16px;
   font-weight: 600;
-  color: #409eff;
+  color: var(--el-color-primary);
   white-space: nowrap;
 }
 
 .mobile-page-title {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: #1f2329;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -231,6 +283,10 @@ function onLogout() {
   }
 
   .mobile-page-title {
+    display: inline;
+  }
+
+  .header-right .mobile-only {
     display: inline;
   }
 

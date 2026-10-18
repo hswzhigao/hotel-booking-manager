@@ -13,12 +13,13 @@
           <el-option v-for="(m, k) in GOLF_STATUS_MAP" :key="k" :label="m.label" :value="k" />
         </el-select>
         <el-date-picker
-          v-model="filters.dateRange"
+          v-model="filterRange"
           type="daterange"
           value-format="YYYY-MM-DD"
           range-separator="至"
           start-placeholder="打球起"
           end-placeholder="打球止"
+          :editable="false"
           style="width: 240px"
         />
         <el-input
@@ -60,14 +61,26 @@
           <el-select v-model="filters.status" placeholder="状态" clearable>
             <el-option v-for="(m, k) in GOLF_STATUS_MAP" :key="k" :label="m.label" :value="k" />
           </el-select>
-          <el-date-picker
-            v-model="filters.dateRange"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            range-separator="至"
-            start-placeholder="打球起"
-            end-placeholder="打球止"
-          />
+          <div class="filter-date-range">
+            <el-date-picker
+              v-model="filterStart"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="打球起"
+              :editable="false"
+              :disabled-date="(d) => filterEnd && d > parseLocalDate(filterEnd)"
+              @change="onFilterStartChange"
+            />
+            <span class="range-sep">至</span>
+            <el-date-picker
+              v-model="filterEnd"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="打球止"
+              :editable="false"
+              :disabled-date="(d) => filterStart && d < parseLocalDate(filterStart)"
+            />
+          </div>
           <el-button @click="resetFilters">重置</el-button>
           
         </div>
@@ -283,6 +296,7 @@
             type="date"
             value-format="YYYY-MM-DD"
             placeholder="选择打球日期"
+            :editable="false"
             style="width: 100%"
           />
         </el-form-item>
@@ -296,7 +310,7 @@
           />
         </el-form-item>
         <el-form-item label="人数">
-          <el-input-number v-model="form.players" :min="1" :max="99" :step="1" />
+          <el-input-number v-model="form.players" :min="1" :max="99" :step="1" class="players-input" />
         </el-form-item>
 
         <el-form-item label="消耗权益">
@@ -368,6 +382,7 @@
             v-model="form.order_time"
             type="datetime"
             placeholder="下单时间（默认当前）"
+            :editable="false"
             style="width: 100%"
           />
         </el-form-item>
@@ -450,9 +465,47 @@ const filters = reactive({
   customer_id: null,
   benefit_holder_id: null,
   status: null,
-  dateRange: null,
+  dateRange: ['', ''],
   search: '',
 })
+
+// 日期工具：value-format 为 YYYY-MM-DD 时用本地时区解析，避免 new Date('YYYY-MM-DD') 按 UTC 解析导致禁选偏差
+function parseLocalDate(str) {
+  if (!str) return null
+  const [y, m, d] = String(str).split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+// 筛选日期：桌面 daterange 与移动端两个独立 date 输入共用 filters.dateRange，且始终为数组（清空时归一为 ['','']）
+const filterRange = computed({
+  get: () => filters.dateRange,
+  set: (v) => {
+    filters.dateRange = Array.isArray(v) && v.length === 2 ? v : ['', '']
+  },
+})
+
+const filterStart = computed({
+  get: () => (Array.isArray(filters.dateRange) ? filters.dateRange[0] : '') || '',
+  set: (v) => {
+    if (!Array.isArray(filters.dateRange)) filters.dateRange = ['', '']
+    filters.dateRange[0] = v || ''
+  },
+})
+
+const filterEnd = computed({
+  get: () => (Array.isArray(filters.dateRange) ? filters.dateRange[1] : '') || '',
+  set: (v) => {
+    if (!Array.isArray(filters.dateRange)) filters.dateRange = ['', '']
+    filters.dateRange[1] = v || ''
+  },
+})
+
+// 移动端筛选「起」晚于「止」时自动同步「止」=「起」（单日也允许相等）
+function onFilterStartChange() {
+  if (filterStart.value && filterEnd.value && filterStart.value > filterEnd.value) {
+    filterEnd.value = filterStart.value
+  }
+}
 
 async function exportCsv() {
   await exportApi.golfOrders({
@@ -492,7 +545,7 @@ function resetFilters() {
   filters.customer_id = null
   filters.benefit_holder_id = null
   filters.status = null
-  filters.dateRange = null
+  filters.dateRange = ['', '']
   filters.search = ''
   loadList(1)
 }
@@ -755,7 +808,7 @@ onMounted(() => {
 
 <style scoped>
 .pager {
-  margin-top: 16px;
+  margin: 12px 0;
   justify-content: flex-end;
 }
 
@@ -787,6 +840,25 @@ onMounted(() => {
   color: #909399;
 }
 
+/* V13 移动端筛选独立日期输入 */
+.filter-date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.filter-date-range .el-date-editor {
+  flex: 1;
+  min-width: 0;
+}
+
+.range-sep {
+  flex-shrink: 0;
+  color: #909399;
+  font-size: 13px;
+}
+
 .holder-option {
   display: flex;
   align-items: center;
@@ -806,5 +878,18 @@ onMounted(() => {
 
 .benefit-block .el-select {
   margin-top: 6px;
+}
+
+/* V13 移动端：人数步进按钮触控区加大（32px 高） */
+@media (max-width: 768px) {
+  .players-input :deep(.el-input__wrapper) {
+    height: 64px;
+  }
+
+  .players-input :deep(.el-input-number__increase),
+  .players-input :deep(.el-input-number__decrease) {
+    width: 32px;
+    height: 32px !important;
+  }
 }
 </style>

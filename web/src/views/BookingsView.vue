@@ -35,12 +35,13 @@
           <el-option v-for="(m, k) in STATUS_MAP" :key="k" :label="m.label" :value="k" />
         </el-select>
         <el-date-picker
-          v-model="filters.dateRange"
+          v-model="filterRange"
           type="daterange"
           value-format="YYYY-MM-DD"
           range-separator="至"
           start-placeholder="入住起"
           end-placeholder="入住止"
+          :editable="false"
           style="width: 240px"
         />
         <el-input
@@ -82,14 +83,26 @@
           <el-select v-model="filters.status" placeholder="状态" clearable>
             <el-option v-for="(m, k) in STATUS_MAP" :key="k" :label="m.label" :value="k" />
           </el-select>
-          <el-date-picker
-            v-model="filters.dateRange"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            range-separator="至"
-            start-placeholder="入住起"
-            end-placeholder="入住止"
-          />
+          <div class="filter-date-range">
+            <el-date-picker
+              v-model="filterStart"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="入住起"
+              :editable="false"
+              :disabled-date="(d) => filterEnd && d > parseLocalDate(filterEnd)"
+              @change="onFilterStartChange"
+            />
+            <span class="range-sep">至</span>
+            <el-date-picker
+              v-model="filterEnd"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="入住止"
+              :editable="false"
+              :disabled-date="(d) => filterStart && d < parseLocalDate(filterStart)"
+            />
+          </div>
           <el-button @click="resetFilters">重置</el-button>
           
         </div>
@@ -348,14 +361,36 @@
         </el-form-item>
         <el-form-item label="入住/离店" prop="dateRange">
           <el-date-picker
-            v-model="form.dateRange"
+            v-model="formRange"
             type="daterange"
             value-format="YYYY-MM-DD"
             range-separator="至"
             start-placeholder="入住日期"
             end-placeholder="离店日期"
+            :editable="false"
+            class="desktop-only"
             style="width: 100%"
           />
+          <div class="mobile-only">
+            <div class="mobile-date-range">
+              <el-date-picker
+                v-model="formCheckIn"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="入住日期"
+                :editable="false"
+                @change="onCheckInChange"
+              />
+              <el-date-picker
+                v-model="formCheckOut"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="离店日期"
+                :editable="false"
+                :disabled-date="(d) => formCheckIn && d < parseLocalDate(formCheckIn)"
+              />
+            </div>
+          </div>
           <span v-if="formNights > 0" class="nights-tip">共 {{ formNights }} 晚</span>
         </el-form-item>
 
@@ -501,6 +536,7 @@
             v-model="form.order_time"
             type="datetime"
             placeholder="选择下单时间"
+            :editable="false"
             style="width: 100%"
           />
         </el-form-item>
@@ -658,9 +694,55 @@ const filters = reactive({
   customer_id: null,
   hotel_id: null,
   status: null,
-  dateRange: null,
+  dateRange: ['', ''],
   search: '',
 })
+
+// 日期工具：value-format 为 YYYY-MM-DD 时用本地时区解析，避免 new Date('YYYY-MM-DD') 按 UTC 解析导致禁选偏差
+function parseLocalDate(str) {
+  if (!str) return null
+  const [y, m, d] = String(str).split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+function addDaysStr(str, days) {
+  const d = parseLocalDate(str)
+  if (!d) return ''
+  d.setDate(d.getDate() + days)
+  const p = (x) => String(x).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+// 筛选日期：桌面 daterange 与移动端两个独立 date 输入共用 filters.dateRange，且始终为数组（清空时归一为 ['','']）
+const filterRange = computed({
+  get: () => filters.dateRange,
+  set: (v) => {
+    filters.dateRange = Array.isArray(v) && v.length === 2 ? v : ['', '']
+  },
+})
+
+const filterStart = computed({
+  get: () => (Array.isArray(filters.dateRange) ? filters.dateRange[0] : '') || '',
+  set: (v) => {
+    if (!Array.isArray(filters.dateRange)) filters.dateRange = ['', '']
+    filters.dateRange[0] = v || ''
+  },
+})
+
+const filterEnd = computed({
+  get: () => (Array.isArray(filters.dateRange) ? filters.dateRange[1] : '') || '',
+  set: (v) => {
+    if (!Array.isArray(filters.dateRange)) filters.dateRange = ['', '']
+    filters.dateRange[1] = v || ''
+  },
+})
+
+// 移动端筛选「起」晚于「止」时自动同步「止」=「起」（单日也允许相等）
+function onFilterStartChange() {
+  if (filterStart.value && filterEnd.value && filterStart.value > filterEnd.value) {
+    filterEnd.value = filterStart.value
+  }
+}
 
 async function exportCsv() {
   const params = {
@@ -702,7 +784,7 @@ function resetFilters() {
   filters.customer_id = null
   filters.hotel_id = null
   filters.status = null
-  filters.dateRange = null
+  filters.dateRange = ['', '']
   filters.search = ''
   loadList(1)
 }
@@ -756,6 +838,34 @@ const emptyForm = () => ({
 })
 
 const form = reactive(emptyForm())
+
+// 日期范围统一为数组（清空时归一为 ['','']），避免移动端 form.dateRange[0]/[1] 直接绑定在清空后报 null 索引错误
+const formRange = computed({
+  get: () => form.dateRange,
+  set: (v) => {
+    form.dateRange = Array.isArray(v) && v.length === 2 ? v : ['', '']
+  },
+})
+
+function ensureFormRange() {
+  if (!Array.isArray(form.dateRange)) form.dateRange = ['', '']
+}
+
+const formCheckIn = computed({
+  get: () => (Array.isArray(form.dateRange) ? form.dateRange[0] : '') || '',
+  set: (v) => {
+    ensureFormRange()
+    form.dateRange[0] = v || ''
+  },
+})
+
+const formCheckOut = computed({
+  get: () => (Array.isArray(form.dateRange) ? form.dateRange[1] : '') || '',
+  set: (v) => {
+    ensureFormRange()
+    form.dateRange[1] = v || ''
+  },
+})
 
 // V7 手续费率默认逻辑：切换渠道时若用户未手动改过，则跟随默认（闲鱼 1.6 / 其他 0）
 const feeRateTouched = ref(false)
@@ -815,6 +925,16 @@ const formNights = computed(() => {
   const diff = new Date(b) - new Date(a)
   return Math.round(diff / 86400000)
 })
+
+// 移动端入住日期变更：晚于离店时自动同步离店 = 入住 + 1 天
+function onCheckInChange() {
+  const checkIn = formCheckIn.value
+  const checkOut = formCheckOut.value
+  if (!checkIn) return
+  if (!checkOut || checkOut <= checkIn) {
+    formCheckOut.value = addDaysStr(checkIn, 1)
+  }
+}
 
 // V5 每晚价模型：行小计 = 每晚价 × 晚数；卖价合计 = Σ行小计（与后端 nights×Σ(price) 一致）
 function itemSubtotal(it) {
@@ -957,6 +1077,10 @@ function removeItem(index) {
 async function onSave() {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
+  if (!form.dateRange?.[0] || !form.dateRange?.[1]) {
+    ElMessage.warning('请选择入住/离店日期')
+    return
+  }
   if (!form.items.length || form.items.some((it) => !it.room_type_id)) {
     ElMessage.warning('每行明细需选择房型')
     return
@@ -1095,7 +1219,7 @@ onMounted(() => {
 
 <style scoped>
 .pager {
-  margin-top: 16px;
+  margin: 12px 0;
   justify-content: flex-end;
 }
 
@@ -1128,6 +1252,32 @@ onMounted(() => {
   margin-left: 10px;
   font-size: 12px;
   color: #909399;
+}
+
+/* V13 移动端独立日期输入（表单 / 筛选） */
+.mobile-date-range {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.filter-date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.filter-date-range .el-date-editor {
+  flex: 1;
+  min-width: 0;
+}
+
+.range-sep {
+  flex-shrink: 0;
+  color: #909399;
+  font-size: 13px;
 }
 
 .drawer-hint {
