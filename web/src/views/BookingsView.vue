@@ -628,7 +628,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {  Plus, Delete, ArrowDown , Download } from '@element-plus/icons-vue'
-import { bookingsApi, golfOrdersApi, statsApi, exportApi } from '../api'
+import { bookingsApi, customersApi, hotelsApi, roomTypesApi, benefitHoldersApi, exportApi } from '../api'
 import {
   money, profitText, profitClass, revenueClass, dateText, datetimeText,
   toDatetimeString, parseDatetime, statusMeta, STATUS_MAP, statusStep,
