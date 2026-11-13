@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # 一键部署：本地构建前端 → rsync 到服务器 → 服务器安装依赖/初始化库/重启服务
 # 用法：在项目根目录执行 ./deploy/deploy.sh
+# 站点路径：https://hhao1121.cn/hotel/（前端静态资源部署到 /var/www/hotel/，VITE_BASE=/hotel/）
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SERVER=ubuntu@124.220.169.36
 APP_DIR=/opt/hhao1121
-WEB_DIR=/var/www/hhao1121/web
+WEB_DIR=/var/www/hotel
 
-echo "==> 1/4 构建前端..."
-( cd web && npm run build )
+echo "==> 1/4 构建前端（VITE_BASE=/hotel/）..."
+( cd web && VITE_BASE=/hotel/ npm run build )
 
 echo "==> 2/4 同步代码..."
 rsync -az --delete web/dist/ "$SERVER:$WEB_DIR/"
@@ -21,4 +22,4 @@ ssh "$SERVER" "cd $APP_DIR/server && npm install --omit=dev && npm run init-db &
 echo "==> 4/4 重启服务..."
 ssh "$SERVER" "sudo systemctl restart hotel-api && sleep 1 && systemctl is-active hotel-api"
 
-echo "部署完成：http://124.220.169.36"
+echo "部署完成：https://hhao1121.cn/hotel/"
