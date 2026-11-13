@@ -54,8 +54,8 @@
       </div>
 
       <div class="desktop-table">
-      <el-table :data="rows" v-loading="loading" empty-text="暂无客户数据">
-        <el-table-column prop="name" label="姓名" min-width="90" />
+      <el-table :data="rows" v-loading="loading" empty-text="暂无客户数据" @sort-change="onSortChange">
+        <el-table-column prop="name" label="姓名" min-width="90" sortable="custom" />
         <el-table-column prop="xianyu_id" label="闲鱼号" min-width="110">
           <template #default="{ row }">{{ row.xianyu_id || '-' }}</template>
         </el-table-column>
@@ -72,9 +72,9 @@
             <span v-if="!row.is_hotel && !row.is_golf">-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="booking_count" label="预定次数" width="90" align="center" />
+        <el-table-column prop="booking_count" label="预定次数" width="90" align="center" sortable="custom" />
         <el-table-column prop="total_room_nights" label="间夜数" width="80" align="center" />
-        <el-table-column label="累计消费" width="110" align="right">
+        <el-table-column prop="total_spend" label="累计消费" width="110" align="right" sortable="custom">
           <template #default="{ row }"><span class="money money-revenue">{{ money(row.total_spend) }}</span></template>
         </el-table-column>
         <el-table-column prop="notes" label="备注" min-width="140" show-overflow-tooltip>
@@ -292,6 +292,8 @@ const filters = reactive({
   search: '',
   is_hotel: null,
   is_golf: null,
+  sort_by: null,
+  sort_order: null,
 })
 
 async function exportCsv() {
@@ -300,6 +302,13 @@ async function exportCsv() {
     is_hotel: filters.is_hotel ?? undefined,
     is_golf: filters.is_golf ?? undefined,
   })
+}
+
+// 列排序：服务端排序
+function onSortChange({ prop, order }) {
+  filters.sort_by = order ? prop : null
+  filters.sort_order = order === 'ascending' ? 'asc' : 'desc'
+  loadList(1)
 }
 
 async function loadList(p = page.value) {
@@ -311,6 +320,8 @@ async function loadList(p = page.value) {
       search: filters.search || undefined,
       is_hotel: filters.is_hotel ?? undefined,
       is_golf: filters.is_golf ?? undefined,
+      sort_by: filters.sort_by || undefined,
+      sort_order: filters.sort_order || undefined,
     })
     rows.value = data.items || []
     total.value = data.total || 0

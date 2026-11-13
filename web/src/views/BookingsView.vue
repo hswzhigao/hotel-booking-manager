@@ -110,8 +110,8 @@
 
       <!-- 列表：桌面表格 / 移动卡片（同一份 rows 数据，CSS 切换） -->
       <div class="desktop-table">
-        <el-table :data="rows" v-loading="loading" empty-text="暂无预定数据">
-        <el-table-column label="下单时间" width="165">
+        <el-table :data="rows" v-loading="loading" empty-text="暂无预定数据" :default-sort="{ prop: 'order_time', order: 'descending' }" @sort-change="onSortChange">
+        <el-table-column prop="order_time" label="下单时间" width="165" sortable="custom">
           <template #default="{ row }">{{ datetimeText(row.order_time) }}</template>
         </el-table-column>
         <el-table-column prop="customer_name" label="客户" min-width="90" />
@@ -119,13 +119,13 @@
         <el-table-column label="预订人" width="90">
           <template #default="{ row }">{{ row.benefit_holder_name || '-' }}</template>
         </el-table-column>
-        <el-table-column label="入住/离店" min-width="175">
+        <el-table-column prop="check_in" label="入住/离店" min-width="175" sortable="custom">
           <template #default="{ row }">{{ dateText(row.check_in) }} ~ {{ dateText(row.check_out) }}</template>
         </el-table-column>
         <el-table-column prop="nights" label="晚数" width="65" align="center" />
         <el-table-column prop="room_count" label="间数" width="65" align="center" />
         <el-table-column prop="items_summary" label="明细" min-width="140" show-overflow-tooltip />
-        <el-table-column label="卖价" width="105" align="right">
+        <el-table-column prop="sale_total" label="卖价" width="105" align="right" sortable="custom">
           <template #default="{ row }"><span class="money money-revenue">{{ money(row.sale_total) }}</span></template>
         </el-table-column>
         <el-table-column label="成本" width="105" align="right">
@@ -134,7 +134,7 @@
         <el-table-column label="手续费" width="90" align="right">
           <template #default="{ row }"><span class="money money-fee">{{ money(row.fee) }}</span></template>
         </el-table-column>
-        <el-table-column label="净利" width="95" align="right">
+        <el-table-column prop="profit" label="净利" width="95" align="right" sortable="custom">
           <template #default="{ row }">
             <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
           </template>
@@ -696,6 +696,8 @@ const filters = reactive({
   status: null,
   dateRange: ['', ''],
   search: '',
+  sort_by: null,
+  sort_order: null,
 })
 
 // 日期工具：value-format 为 YYYY-MM-DD 时用本地时区解析，避免 new Date('YYYY-MM-DD') 按 UTC 解析导致禁选偏差
@@ -756,6 +758,13 @@ async function exportCsv() {
   await exportApi.bookings(params)
 }
 
+// 列排序：服务端排序（保证全量数据一致），仅支持可排序列
+function onSortChange({ prop, order }) {
+  filters.sort_by = order ? prop : null
+  filters.sort_order = order === 'ascending' ? 'asc' : 'desc'
+  loadList(1)
+}
+
 async function loadList(p = page.value) {
   loading.value = true
   try {
@@ -768,6 +777,8 @@ async function loadList(p = page.value) {
       date_from: filters.dateRange?.[0] || undefined,
       date_to: filters.dateRange?.[1] || undefined,
       search: filters.search || undefined,
+      sort_by: filters.sort_by || undefined,
+      sort_order: filters.sort_order || undefined,
     }
     const data = await bookingsApi.list(params)
     rows.value = data.items || []

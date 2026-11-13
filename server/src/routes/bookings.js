@@ -109,6 +109,13 @@ async function adjustHotelBenefit(conn, sign, holderId, n) {
 router.get('/', async (req, res, next) => {
   try {
     const { customer_id, hotel_id, status, date_from, date_to, search = '', page = 1, page_size = 20 } = req.query;
+    const { parseSort } = require('../utils/sort');
+    const SORT_COLS = {
+      order_time: 'b.order_time', check_in: 'b.check_in', check_out: 'b.check_out',
+      sale_total: 'b.sale_total', cost_total: 'b.cost_total', nights: 'b.nights',
+      profit: '(b.sale_total - b.cost_total - ROUND(b.sale_total * b.fee_rate, 2))',
+    };
+    const orderSql = parseSort(req.query, SORT_COLS, 'ORDER BY b.order_time DESC, b.id DESC');
     const where = []; const params = [];
     if (customer_id) { where.push('b.customer_id = ?'); params.push(customer_id); }
     if (hotel_id) { where.push('b.hotel_id = ?'); params.push(hotel_id); }
@@ -138,7 +145,7 @@ router.get('/', async (req, res, next) => {
         (b.sale_total - b.cost_total - ROUND(b.sale_total * b.fee_rate, 2)) profit
       FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id
       LEFT JOIN benefit_holders bh ON bh.id = b.benefit_holder_id
-      ${whereSql} ORDER BY b.order_time DESC, b.id DESC LIMIT ? OFFSET ?`,
+      ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
       [...params, size, offset]
     );
     const ids = rows.map(r => r.id);
@@ -177,13 +184,20 @@ router.get('/export', async (req, res, next) => {
     if (date_to) { if (!parseDate(date_to)) bad(400, 'date_to 格式应为 YYYY-MM-DD'); where.push('b.check_in <= ?'); params.push(date_to); }
     if (search) { where.push('(c.name LIKE ? OR c.search_key LIKE ? OR h.name LIKE ? OR h.search_key LIKE ?)'); const like = `%${search}%`; params.push(like, like, like, like); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const { parseSort } = require('../utils/sort');
+    const SORT_COLS = {
+      order_time: 'b.order_time', check_in: 'b.check_in', check_out: 'b.check_out',
+      sale_total: 'b.sale_total', cost_total: 'b.cost_total', nights: 'b.nights',
+      profit: '(b.sale_total - b.cost_total - ROUND(b.sale_total * b.fee_rate, 2))',
+    };
+    const orderSql = parseSort(req.query, SORT_COLS, 'ORDER BY b.order_time DESC, b.id DESC');
     const [rows] = await pool.query(
       `SELECT b.*, c.name customer_name, h.name hotel_name, bh.name benefit_holder_name,
         ROUND(b.sale_total * b.fee_rate, 2) fee,
         (b.sale_total - b.cost_total - ROUND(b.sale_total * b.fee_rate, 2)) profit
       FROM bookings b JOIN customers c ON c.id = b.customer_id JOIN hotels h ON h.id = b.hotel_id
       LEFT JOIN benefit_holders bh ON bh.id = b.benefit_holder_id
-      ${whereSql} ORDER BY b.order_time DESC, b.id DESC`,
+      ${whereSql} ${orderSql}`,
       params
     );
     const ids = rows.map(r => r.id);

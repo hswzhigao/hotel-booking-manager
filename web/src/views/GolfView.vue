@@ -88,8 +88,8 @@
 
       <!-- 列表：桌面表格 / 移动卡片 -->
       <div class="desktop-table">
-      <el-table :data="rows" v-loading="loading" empty-text="暂无高尔夫订单">
-        <el-table-column label="下单时间" width="160">
+      <el-table :data="rows" v-loading="loading" empty-text="暂无高尔夫订单" :default-sort="{ prop: 'order_time', order: 'descending' }" @sort-change="onSortChange">
+        <el-table-column prop="order_time" label="下单时间" width="160" sortable="custom">
           <template #default="{ row }">{{ datetimeText(row.order_time) }}</template>
         </el-table-column>
         <el-table-column prop="customer_name" label="客户" min-width="90" />
@@ -97,7 +97,7 @@
           <template #default="{ row }">{{ row.benefit_holder_name || '-' }}</template>
         </el-table-column>
         <el-table-column prop="course_name" label="球场" min-width="150" show-overflow-tooltip />
-        <el-table-column label="打球日期" width="105">
+        <el-table-column prop="play_date" label="打球日期" width="105" sortable="custom">
           <template #default="{ row }">{{ dateText(row.play_date) }}</template>
         </el-table-column>
         <el-table-column prop="players" label="人数" width="60" align="center" />
@@ -107,7 +107,7 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="卖价" width="95" align="right">
+        <el-table-column prop="sale_price" label="卖价" width="95" align="right" sortable="custom">
           <template #default="{ row }"><span class="money money-revenue">{{ money(row.sale_price) }}</span></template>
         </el-table-column>
         <el-table-column label="成本" width="95" align="right">
@@ -116,7 +116,7 @@
         <el-table-column label="手续费" width="85" align="right">
           <template #default="{ row }"><span class="money money-fee">{{ money(row.fee) }}</span></template>
         </el-table-column>
-        <el-table-column label="净利" width="90" align="right">
+        <el-table-column prop="profit" label="净利" width="90" align="right" sortable="custom">
           <template #default="{ row }">
             <span class="money" :class="profitClass(row.profit)">{{ profitText(row.profit) }}</span>
           </template>
@@ -467,6 +467,8 @@ const filters = reactive({
   status: null,
   dateRange: ['', ''],
   search: '',
+  sort_by: null,
+  sort_order: null,
 })
 
 // 日期工具：value-format 为 YYYY-MM-DD 时用本地时区解析，避免 new Date('YYYY-MM-DD') 按 UTC 解析导致禁选偏差
@@ -518,6 +520,13 @@ async function exportCsv() {
   })
 }
 
+// 列排序：服务端排序
+function onSortChange({ prop, order }) {
+  filters.sort_by = order ? prop : null
+  filters.sort_order = order === 'ascending' ? 'asc' : 'desc'
+  loadList(1)
+}
+
 async function loadList(p = page.value) {
   loading.value = true
   try {
@@ -530,6 +539,8 @@ async function loadList(p = page.value) {
       date_from: filters.dateRange?.[0] || undefined,
       date_to: filters.dateRange?.[1] || undefined,
       search: filters.search || undefined,
+      sort_by: filters.sort_by || undefined,
+      sort_order: filters.sort_order || undefined,
     })
     rows.value = data.items || []
     total.value = data.total || 0

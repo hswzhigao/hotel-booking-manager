@@ -81,7 +81,8 @@ async function onSubmit() {
     })
     ElMessage.success('密码修改成功，请使用新密码重新登录')
     auth.logout()
-    window.location.href = '/login'
+    // 跟随部署基础路径（如 /hotel/），避免跳转到域名根
+    window.location.href = `${import.meta.env.BASE_URL}login`
   } catch (e) {
     // 错误提示已由拦截器统一处理
   } finally {

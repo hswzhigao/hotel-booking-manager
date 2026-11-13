@@ -134,6 +134,13 @@ router.get('/', async (req, res, next) => {
     }
     if (search) { where.push('(c.name LIKE ? OR c.search_key LIKE ? OR g.course_name LIKE ? OR g.course_search_key LIKE ?)'); const like = `%${search}%`; params.push(like, like, like, like); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const { parseSort } = require('../utils/sort');
+    const SORT_COLS = {
+      order_time: 'g.order_time', play_date: 'g.play_date', players: 'g.players',
+      sale_price: 'g.sale_price', cost_price: 'g.cost_price',
+      profit: '(g.sale_price - g.cost_price - ROUND(g.sale_price * g.fee_rate, 2))',
+    };
+    const orderSql = parseSort(req.query, SORT_COLS, 'ORDER BY g.order_time DESC, g.id DESC');
     const [countRows] = await pool.query(
       `SELECT COUNT(*) total FROM golf_orders g JOIN customers c ON c.id = g.customer_id ${whereSql}`, params
     );
@@ -148,7 +155,7 @@ router.get('/', async (req, res, next) => {
       JOIN customers c ON c.id = g.customer_id
       LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
       LEFT JOIN golf_benefit_types t ON t.id = g.benefit_type_id
-      ${whereSql} ORDER BY g.order_time DESC, g.id DESC LIMIT ? OFFSET ?`,
+      ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
       [...params, size, offset]
     );
     res.json({ total: countRows[0].total, items: rows });
@@ -170,6 +177,13 @@ router.get('/export', async (req, res, next) => {
     if (date_to) { if (!parseDate(date_to)) bad(400, 'date_to 格式应为 YYYY-MM-DD'); where.push('g.play_date <= ?'); params.push(date_to); }
     if (search) { where.push('(c.name LIKE ? OR c.search_key LIKE ? OR g.course_name LIKE ? OR g.course_search_key LIKE ?)'); const like = `%${search}%`; params.push(like, like, like, like); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const { parseSort } = require('../utils/sort');
+    const SORT_COLS = {
+      order_time: 'g.order_time', play_date: 'g.play_date', players: 'g.players',
+      sale_price: 'g.sale_price', cost_price: 'g.cost_price',
+      profit: '(g.sale_price - g.cost_price - ROUND(g.sale_price * g.fee_rate, 2))',
+    };
+    const orderSql = parseSort(req.query, SORT_COLS, 'ORDER BY g.order_time DESC, g.id DESC');
     const [rows] = await pool.query(
       `SELECT g.*, c.name customer_name, bh.name benefit_holder_name, t.name benefit_type_name,
         ROUND(g.sale_price * g.fee_rate, 2) fee,
@@ -178,7 +192,7 @@ router.get('/export', async (req, res, next) => {
       JOIN customers c ON c.id = g.customer_id
       LEFT JOIN benefit_holders bh ON bh.id = g.benefit_holder_id
       LEFT JOIN golf_benefit_types t ON t.id = g.benefit_type_id
-      ${whereSql} ORDER BY g.order_time DESC, g.id DESC`,
+      ${whereSql} ${orderSql}`,
       params
     );
     const STATUS_LABEL = { pending: '待定位', booked: '已定位', completed: '已完成', cancelled: '已取消' };

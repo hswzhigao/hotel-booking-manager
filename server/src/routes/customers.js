@@ -38,11 +38,17 @@ router.get('/', async (req, res, next) => {
     if (is_hotel !== undefined && is_hotel !== '') { where.push('c.is_hotel = ?'); params.push(Number(is_hotel) === 1 ? 1 : 0); }
     if (is_golf !== undefined && is_golf !== '') { where.push('c.is_golf = ?'); params.push(Number(is_golf) === 1 ? 1 : 0); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const { parseSort } = require('../utils/sort');
+    const SORT_COLS = {
+      name: 'c.name', created_at: 'c.created_at', phone: 'c.phone',
+      total_spend: 'total_spend', booking_count: 'booking_count', total_room_nights: 'total_room_nights',
+    };
+    const orderSql = parseSort(req.query, SORT_COLS, 'ORDER BY c.id DESC');
     const [countRows] = await pool.query(`SELECT COUNT(*) total FROM customers c ${whereSql}`, params);
     const size = Math.min(100, Number(page_size) || 20);
     const offset = (Math.max(1, Number(page) || 1) - 1) * size;
     const [rows] = await pool.query(
-      `SELECT c.*, ${STATS_SQL} FROM customers c ${whereSql} ORDER BY c.id DESC LIMIT ? OFFSET ?`,
+      `SELECT c.*, ${STATS_SQL} FROM customers c ${whereSql} ${orderSql} LIMIT ? OFFSET ?`,
       [...params, size, offset]
     );
     res.json({ total: countRows[0].total, items: rows });
@@ -59,8 +65,14 @@ router.get('/export', async (req, res, next) => {
     if (is_hotel !== undefined && is_hotel !== '') { where.push('c.is_hotel = ?'); params.push(Number(is_hotel) === 1 ? 1 : 0); }
     if (is_golf !== undefined && is_golf !== '') { where.push('c.is_golf = ?'); params.push(Number(is_golf) === 1 ? 1 : 0); }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const { parseSort } = require('../utils/sort');
+    const SORT_COLS = {
+      name: 'c.name', created_at: 'c.created_at', phone: 'c.phone',
+      total_spend: 'total_spend', booking_count: 'booking_count', total_room_nights: 'total_room_nights',
+    };
+    const orderSql = parseSort(req.query, SORT_COLS, 'ORDER BY c.id DESC');
     const [rows] = await pool.query(
-      `SELECT c.*, ${STATS_SQL} FROM customers c ${whereSql} ORDER BY c.id DESC`, params
+      `SELECT c.*, ${STATS_SQL} FROM customers c ${whereSql} ${orderSql}`, params
     );
     const { sendCsv } = require('../utils/csv');
     sendCsv(res, `客户_${new Date().toISOString().slice(0, 10)}.csv`,
