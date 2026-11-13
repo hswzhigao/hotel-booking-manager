@@ -100,7 +100,7 @@
         <el-table-column prop="play_date" label="打球日期" width="105" sortable="custom">
           <template #default="{ row }">{{ dateText(row.play_date) }}</template>
         </el-table-column>
-        <el-table-column prop="players" label="人数" width="60" align="center" />
+        <el-table-column prop="players" label="权益点" width="70" align="center" />
         <el-table-column label="权益种类" min-width="105">
           <template #default="{ row }">
             <el-tag v-if="row.benefit_type_name" type="warning" size="small">{{ row.benefit_type_name }}</el-tag>
@@ -171,8 +171,8 @@
           </div>
           <div class="m-sub">{{ row.course_name }}</div>
           <div class="m-line">
-            <span class="m-label">日期/人数</span>
-            <span class="m-value">{{ dateText(row.play_date) }} · {{ row.players }}人</span>
+            <span class="m-label">日期/权益点</span>
+            <span class="m-value">{{ dateText(row.play_date) }} · {{ row.players }}点</span>
           </div>
           <div class="m-line">
             <span class="m-label">卖价/成本</span>
@@ -309,8 +309,9 @@
             style="width: 100%"
           />
         </el-form-item>
-        <el-form-item label="人数">
-          <el-input-number v-model="form.players" :min="1" :max="99" :step="1" class="players-input" />
+        <el-form-item label="权益点">
+          <el-input-number v-model="form.players" :min="1" :max="20" :step="1" class="players-input" />
+          <div class="field-tip">消耗预订人对应权益种类的权益点（勾选「消耗高尔夫权益」时扣减）</div>
         </el-form-item>
 
         <el-form-item label="消耗权益">
@@ -891,7 +892,7 @@ onMounted(() => {
   margin-top: 6px;
 }
 
-/* V13 移动端：人数步进按钮触控区加大（32px 高） */
+/* V13 移动端：权益点步进按钮触控区加大（32px 高） */
 @media (max-width: 768px) {
   .players-input :deep(.el-input__wrapper) {
     height: 64px;

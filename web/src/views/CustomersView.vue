@@ -220,7 +220,7 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="players" label="人数" width="60" align="center" />
+        <el-table-column prop="players" label="权益点" width="70" align="center" />
         <el-table-column label="卖价" width="95" align="right">
           <template #default="{ row }"><span class="money money-revenue">{{ money(row.sale_price) }}</span></template>
         </el-table-column>

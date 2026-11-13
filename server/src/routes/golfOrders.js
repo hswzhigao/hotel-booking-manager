@@ -59,7 +59,7 @@ async function validatePayload(body) {
   const sp = Number(sale_price) || 0, cp = Number(cost_price) || 0;
   if (sp < 0 || cp < 0) bad(400, '价格不合法');
   const pl = Number(players) || 1;
-  if (!Number.isInteger(pl) || pl < 1 || pl > 20) bad(400, '打球人数不合法');
+  if (!Number.isInteger(pl) || pl < 1 || pl > 20) bad(400, '权益点应为 1-20 的整数');
   const ot = parseOrderTime(order_time);
   const [[cust]] = await pool.query('SELECT id FROM customers WHERE id = ?', [customer_id]);
   if (!cust) bad(400, '客户不存在');
@@ -83,6 +83,7 @@ async function validatePayload(body) {
       'SELECT id, count_left FROM holder_golf_benefits WHERE holder_id = ? AND benefit_type_id = ?', [holderId, type.id]
     );
     if (!held) bad(400, '该预订人未持有此权益种类');
+    if (Number(held.count_left) < pl) bad(400, `该预订人此权益剩余不足（剩 ${held.count_left} 点，需扣 ${pl} 点）`);
     typeId = type.id;
   } else if (benefit_type_id !== undefined && benefit_type_id !== null && benefit_type_id !== '') {
     // 不勾权益但传了种类：仅校验存在性，便于展示
@@ -97,18 +98,18 @@ async function validatePayload(body) {
 
 const effectiveUse = (benefitUsed, status) => (Number(benefitUsed) === 1 && status !== 'cancelled') ? 1 : 0;
 
-// 权益占用调整：'-' 扣一行，'+' 返还一行（原子防透支）
-async function adjustBenefit(conn, sign, holderId, typeId) {
+// 权益占用调整：'-' 扣 points 点，'+' 返还 points 点（原子防透支）
+async function adjustBenefit(conn, sign, holderId, typeId, points = 1) {
   if (sign === '-') {
     const [c] = await conn.query(
-      'UPDATE holder_golf_benefits SET count_left = count_left - 1 WHERE holder_id = ? AND benefit_type_id = ? AND count_left >= 1',
-      [holderId, typeId]
+      'UPDATE holder_golf_benefits SET count_left = count_left - ? WHERE holder_id = ? AND benefit_type_id = ? AND count_left >= ?',
+      [points, holderId, typeId, points]
     );
-    if (c.affectedRows === 0) bad(400, '该权益种类剩余次数不足');
+    if (c.affectedRows === 0) bad(400, '该权益种类剩余权益点不足');
   } else {
     await conn.query(
-      'UPDATE holder_golf_benefits SET count_left = count_left + 1 WHERE holder_id = ? AND benefit_type_id = ?',
-      [holderId, typeId]
+      'UPDATE holder_golf_benefits SET count_left = count_left + ? WHERE holder_id = ? AND benefit_type_id = ?',
+      [points, holderId, typeId]
     );
   }
 }
@@ -199,7 +200,7 @@ router.get('/export', async (req, res, next) => {
     const CH_LABEL = { xianyu: '闲鱼', wechat: '微信', other: '其他' };
     const { sendCsv } = require('../utils/csv');
     sendCsv(res, `高尔夫订单_${new Date().toISOString().slice(0, 10)}.csv`,
-      ['下单时间', '客户', '预订人', '球场', '打球日期', '开球时间', '人数', '状态', '卖价', '成本', '手续费率', '手续费', '净利', '权益种类', '渠道', '需教定位', '备注'],
+      ['下单时间', '客户', '预订人', '球场', '打球日期', '开球时间', '权益点', '状态', '卖价', '成本', '手续费率', '手续费', '净利', '权益种类', '渠道', '需教定位', '备注'],
       rows.map(r => [
         String(r.order_time || '').slice(0, 19).replace('T', ' '),
         r.customer_name, r.benefit_holder_name || '', r.course_name,
@@ -253,7 +254,7 @@ router.post('/', async (req, res, next) => {
     );
     const id = ins.insertId;
     if (effectiveUse(p.benefitUsed, p.status) === 1) {
-      await adjustBenefit(conn, '-', p.holderId, p.typeId);
+      await adjustBenefit(conn, '-', p.holderId, p.typeId, p.players);
     }
     await conn.commit();
     res.json({ id });
@@ -287,19 +288,25 @@ router.put('/:id', async (req, res, next) => {
     const newUse = effectiveUse(p.benefitUsed, p.status);
     const oldHolder = old.benefit_holder_id || null;
     const oldType = old.benefit_type_id || null;
+    const oldPoints = Number(old.players) || 1;
     const sameTarget = oldHolder !== null && oldHolder === p.holderId && oldType !== null && oldType === p.typeId;
     if (sameTarget) {
       if (newUse === 1 && oldUse === 0) {
-        await adjustBenefit(conn, '-', p.holderId, p.typeId);
+        await adjustBenefit(conn, '-', p.holderId, p.typeId, p.players);
       } else if (oldUse === 1 && newUse === 0) {
-        await adjustBenefit(conn, '+', oldHolder, oldType);
+        await adjustBenefit(conn, '+', oldHolder, oldType, oldPoints);
+      } else if (oldUse === 1 && newUse === 1 && oldPoints !== p.players) {
+        // 权益点变动：按差额调整
+        const diff = p.players - oldPoints;
+        if (diff > 0) await adjustBenefit(conn, '-', p.holderId, p.typeId, diff);
+        else if (diff < 0) await adjustBenefit(conn, '+', p.holderId, p.typeId, -diff);
       }
     } else {
       if (oldUse === 1 && oldHolder !== null && oldType !== null) {
-        await adjustBenefit(conn, '+', oldHolder, oldType);
+        await adjustBenefit(conn, '+', oldHolder, oldType, oldPoints);
       }
       if (newUse === 1) {
-        await adjustBenefit(conn, '-', p.holderId, p.typeId);
+        await adjustBenefit(conn, '-', p.holderId, p.typeId, p.players);
       }
     }
     await conn.commit();
@@ -319,7 +326,7 @@ router.delete('/:id', async (req, res, next) => {
     if (!old) bad(404, '高尔夫订单不存在');
     await conn.beginTransaction();
     if (effectiveUse(old.benefit_used, old.status) === 1 && old.benefit_holder_id && old.benefit_type_id) {
-      await adjustBenefit(conn, '+', old.benefit_holder_id, old.benefit_type_id);
+      await adjustBenefit(conn, '+', old.benefit_holder_id, old.benefit_type_id, Number(old.players) || 1);
     }
     await conn.query('DELETE FROM golf_orders WHERE id = ?', [id]);
     await conn.commit();

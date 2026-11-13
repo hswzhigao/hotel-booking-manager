@@ -302,7 +302,7 @@
                   {{ row.play_date }}<span v-if="row.tee_time"> {{ row.tee_time }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="players" label="人数" width="60" align="center" />
+              <el-table-column prop="players" label="权益点" width="70" align="center" />
               <el-table-column label="权益种类" min-width="105">
                 <template #default="{ row }">
                   <el-tag v-if="row.benefit_type_name" type="warning" size="small">{{ row.benefit_type_name }}</el-tag>
@@ -336,7 +336,7 @@
               </div>
               <div class="m-sub">{{ row.course_name }}</div>
               <div class="m-line">
-                <span class="m-label">日期/人数</span>
+                <span class="m-label">日期/权益点</span>
                 <span class="m-value">{{ row.play_date }} · {{ row.players }}人</span>
               </div>
               <div class="m-line">
@@ -434,7 +434,7 @@
         <el-descriptions-item label="打球日期">
           {{ golfDetail.play_date }}<span v-if="golfDetail.tee_time"> {{ golfDetail.tee_time }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="人数">{{ golfDetail.players || '-' }} 人</el-descriptions-item>
+        <el-descriptions-item label="权益点">{{ golfDetail.players || '-' }} 点</el-descriptions-item>
         <el-descriptions-item label="权益种类">
           <el-tag v-if="golfDetail.benefit_type_name" type="warning" size="small">{{ golfDetail.benefit_type_name }}</el-tag>
           <span v-else>{{ golfDetail.benefit_used ? '-' : '未使用' }}</span>
